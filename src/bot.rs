@@ -2,12 +2,12 @@ use teloxide::{prelude::*, types::{MessageEntityKind, ParseMode}, utils::html};
 use crate::{sanitizer::RuleEngine, db::Db, models::ChatConfig};
 use url::Url;
 
-pub async fn run_bot(bot: Bot, db: Db, rules: RuleEngine) {
+pub async fn run_bot(bot: Bot, db: Db, rules: RuleEngine, config: crate::config::Config) {
     let handler = Update::filter_message()
         .endpoint(handle_message);
 
     Dispatcher::builder(bot, handler)
-        .dependencies(dptree::deps![db, rules])
+        .dependencies(dptree::deps![db, rules, config])
         .enable_ctrlc_handler()
         .build()
         .dispatch()
@@ -19,10 +19,28 @@ async fn handle_message(
     msg: Message,
     db: Db,
     rules: RuleEngine,
+    config: crate::config::Config,
 ) -> ResponseResult<()> {
     let chat_id = msg.chat.id;
     let user_id = msg.from().map(|u| u.id.0 as i64).unwrap_or(0);
 
+    // Handle /start command in private chat
+    if let Some(text) = msg.text() {
+        if text == "/start" && msg.chat.is_private() {
+            let keyboard = teloxide::types::InlineKeyboardMarkup::new(vec![vec![
+                teloxide::types::InlineKeyboardButton::url(
+                    "🚀 Apri Dashboard",
+                    config.dashboard_url.parse().unwrap(),
+                )
+            ]]);
+
+            bot.send_message(chat_id, "<b>Benvenuto nel gestore ClearURLs!</b>\n\nPuoi configurare il bot e gestire i tuoi link puliti direttamente dal dashboard web protetto.")
+                .parse_mode(ParseMode::Html)
+                .reply_markup(keyboard)
+                .await?;
+            return Ok(());
+        }
+    }
     // Persist/Update chat info
     if msg.chat.is_group() || msg.chat.is_supergroup() || msg.chat.is_channel() {
         let title = msg.chat.title().map(|s| s.to_string());

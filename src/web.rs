@@ -11,10 +11,10 @@ use crate::{db::Db, config::Config, models::{UserConfig, ChatConfig}};
 use askama::Template;
 use std::collections::HashMap;
 use hmac::{Hmac, Mac};
-use sha2::Sha256;
 use tracing::info;
 use hex;
 use tower_http::set_header::SetResponseHeaderLayer;
+use time::Duration;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -63,6 +63,7 @@ pub async fn run_server(config: Config, db: Db) {
     let app = Router::new()
         .route("/", get(index))
         .route("/login", get(login_page))
+        .route("/favicon.ico", get(|| async { axum::http::StatusCode::NO_CONTENT }))
         .route("/auth/telegram/callback", get(auth_callback))
         .route("/logout", get(logout))
         .route("/dashboard/update", post(update_config))
@@ -137,6 +138,8 @@ async fn auth_callback(
         let cookie = Cookie::build(("user_session", cookie_val))
             .path("/")
             .http_only(true)
+            .max_age(Duration::days(30))
+            .same_site(axum_extra::extract::cookie::SameSite::Lax)
             .build();
 
         return (jar.add(cookie), Redirect::to("/")).into_response();
@@ -182,6 +185,19 @@ fn verify_telegram_auth(params: &HashMap<String, String>, token: &str) -> bool {
         None => return false,
     };
 
+    // Verify auth_date to prevent replay attacks (max 24h old)
+    if let Some(auth_date_str) = params.get("auth_date") {
+        if let Ok(auth_date) = auth_date_str.parse::<u64>() {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+            if now - auth_date > 86400 {
+                return false;
+            }
+        }
+    }
+
     let mut keys: Vec<&String> = params.keys().filter(|k| k.as_str() != "hash").collect();
     keys.sort();
 
@@ -190,7 +206,7 @@ fn verify_telegram_auth(params: &HashMap<String, String>, token: &str) -> bool {
         .collect::<Vec<String>>()
         .join("\n");
 
-    use sha2::Digest;
+    use sha2::{Digest, Sha256};
     let secret_key = Sha256::digest(token.as_bytes());
     
     type HmacSha256 = Hmac<Sha256>;

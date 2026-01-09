@@ -25,7 +25,7 @@ async fn main() -> anyhow::Result<()> {
     let rules = RuleEngine::new(&config.clearurls_source).await?;
     let bot = Bot::new(&config.bot_token);
     
-    let bot_task = bot::run_bot(bot, db.clone(), rules.clone());
+    let bot_task = bot::run_bot(bot, db.clone(), rules.clone(), config.clone());
     let web_task = web::run_server(config, db);
 
     tokio::select! {
