@@ -2,12 +2,18 @@ use teloxide::{prelude::*, types::{MessageEntityKind, ParseMode}, utils::html};
 use crate::{sanitizer::RuleEngine, db::Db, models::ChatConfig, i18n};
 use url::Url;
 
-pub async fn run_bot(bot: Bot, db: Db, rules: RuleEngine, config: crate::config::Config) {
+pub async fn run_bot(
+    bot: Bot, 
+    db: Db, 
+    rules: RuleEngine, 
+    config: crate::config::Config,
+    event_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
+) {
     let handler = Update::filter_message()
         .endpoint(handle_message);
 
     Dispatcher::builder(bot, handler)
-        .dependencies(dptree::deps![db, rules, config])
+        .dependencies(dptree::deps![db, rules, config, event_tx])
         .enable_ctrlc_handler()
         .build()
         .dispatch()
@@ -20,23 +26,28 @@ async fn handle_message(
     db: Db,
     rules: RuleEngine,
     config: crate::config::Config,
+    event_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
 ) -> ResponseResult<()> {
     let chat_id = msg.chat.id;
     let user_id = msg.from().map(|u| u.id.0 as i64).unwrap_or(0);
     let user_config = db.get_user_config(user_id).await.unwrap_or_default();
     let tr = i18n::get_translations(&user_config.language);
 
-    // Handle /start command in private chat
+    // ... existing start/help commands ...
     if let Some(text) = msg.text() {
         if text.starts_with('/') && msg.chat.is_private() {
             match text {
                 "/start" => {
-                    let keyboard = teloxide::types::InlineKeyboardMarkup::new(vec![vec![
-                        teloxide::types::InlineKeyboardButton::url(
+                    let keyboard = teloxide::types::InlineKeyboardMarkup::new(vec![
+                        vec![teloxide::types::InlineKeyboardButton::url(
                             tr.open_dashboard,
                             config.dashboard_url.parse().unwrap(),
-                        )
-                    ]]);
+                        )],
+                        vec![teloxide::types::InlineKeyboardButton::web_app(
+                            "📱 Open Web App",
+                            teloxide::types::WebAppInfo { url: config.dashboard_url.parse().unwrap() },
+                        )]
+                    ]);
 
                     let welcome_text = tr.welcome.replace("{}", &user_id.to_string());
                     bot.send_message(chat_id, welcome_text)
@@ -186,6 +197,15 @@ async fn handle_message(
     let _ = db.increment_cleaned_count(user_id, cleaned_urls.len() as i64).await;
     for (orig, clean, prov) in &cleaned_urls {
         let _ = db.log_cleaned_link(user_id, orig, clean, prov).await;
+        
+        // Broadcast SSE event
+        let _ = event_tx.send(serde_json::json!({
+            "user_id": user_id,
+            "original_url": orig,
+            "cleaned_url": clean,
+            "provider_name": prov,
+            "timestamp": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
+        }));
     }
 
     let mode = match chat_config.as_ref().map(|c| c.mode.clone()).unwrap_or("default".into()).as_str() {

@@ -1,52 +1,45 @@
 # ClearURLs Telegram Bot 🛡️
 
-A high-performance Rust-based Telegram bot that automatically removes tracking parameters from URLs using the ClearURLs ruleset. Features a secure web dashboard for user management and real-time statistics.
+A professional, high-performance Rust-based Telegram bot that automatically removes tracking parameters from URLs using the ClearURLs ruleset. Featuring a real-time, accessible web dashboard and advanced management features.
 
-## Features
+## 🌟 Advanced Features
 
-- **Automatic Sanitization**: Detects and cleans URLs in private chats, groups, and channels.
-- **Media Support**: Automatically cleans links found in **captions** of photos, videos, documents, and audio files.
-- **Auto-Updating Rules**: Background task refreshes the ClearURLs ruleset every 24 hours without service interruption.
-- **Real-time Statistics**: Tracks the total number of links cleaned per user, visible both on the web dashboard and via bot commands.
-- **Web Dashboard**: Secure Material-style interface to manage personal settings and view cleaning stats.
-- **Action Modes**:
-  - `Reply`: The bot replies with the cleaned version of the links.
-  - `Delete & Repost`: Deletes the original message and posts a clean version (requires "Delete Messages" permission).
-- **Global Toggle & Whitelist**: Enable/disable the bot or specify domains that should never be cleaned.
+- **Real-Time Dashboard**: Updates stats and history instantly via **Server-Sent Events (SSE)** without page reloads.
+- **Telegram Web App Integration**: Access the full management dashboard directly inside Telegram.
+- **Modern UI/UX with Dark Mode**: Responsive design that automatically adapts to system themes (Light/Dark).
+- **Multi-Language Support**: Full i18n support for Italian and English.
+- **Granular Control**: Per-chat configuration (Reply/Delete modes) and custom tracking parameter removal.
+- **Deep Auditing**: Track which provider (Amazon, Google, etc.) cleaned each link.
+- **CSV Export**: Download your full cleaning history for personal analysis.
+- **Enterprise Ready**: Multi-stage Docker build and automatic configuration validation.
 
-## Bot Commands
+## 🛠️ Bot Commands
 
-- `/start` - Initial setup and direct link to the secure dashboard.
-- `/help` - Show usage instructions and available commands.
-- `/stats` - View your personal cleaning statistics directly in Telegram.
+- `/start` - Initial setup, shows your User ID and provides access to the Web App.
+- `/help` - Usage instructions and command list.
+- `/stats` - View your personal cleaning statistics in-chat.
 
-## Setup
+## 🚀 Quick Start
 
-1. **Clone the repository**.
-2. **Configure Environment**:
+1. **Clone & Configure**:
    - Copy `.env.example` to `.env`.
-   - Create a bot via [@BotFather](https://t.me/BotFather) and get the token.
-   - Set `TELOXIDE_TOKEN`, `BOT_USERNAME`, and `DASHBOARD_URL` in `.env`.
-   - *Note: For local development, use `http://127.0.0.1:3000`.*
-3. **Setup Telegram Login**:
-   - In @BotFather, use `/setdomain` to link your `DASHBOARD_URL` (e.g., `http://127.0.0.1:3000`) to your bot. This is required for the Telegram Login widget.
-4. **Run the application**:
+   - Set `TELOXIDE_TOKEN`, `BOT_USERNAME`, `DASHBOARD_URL`, and `ADMIN_ID`.
+2. **Setup Telegram Domain**:
+   - Use `/setdomain` in [@BotFather](https://t.me/BotFather) to point to your `DASHBOARD_URL`.
+3. **Run with Docker**:
    ```bash
-   cargo run --release
+   docker-compose up --build
    ```
+   *Or locally with `cargo run --release`.*
 
-## Technical Architecture
+## 🏗️ Technical Architecture
 
-- **Language**: Rust (Edition 2021)
-- **Telegram Framework**: [teloxide](https://github.com/teloxide/teloxide)
-- **Web Server**: [axum](https://github.com/tokio-rs/axum) with `tower-http` security layers.
-- **Security**:
-  - Strict **Content Security Policy (CSP)** for Telegram OAuth.
-  - Signed, HttpOnly, and SameSite session cookies.
-  - HMAC-SHA256 authentication verification with replay attack protection.
-- **Database**: [sqlx](https://github.com/launchbadge/sqlx) (SQLite) with automatic migrations.
-- **Rules Engine**: Concurrent regex-based engine with `RwLock` for zero-downtime updates.
+- **Backend**: Rust 2021, Axum (Web), Teloxide (Bot).
+- **Real-time**: Async broadcast channels with SSE streaming.
+- **Frontend**: Accessible HTML5/JS with Chart.js and native Dark Mode support.
+- **Database**: SQLite with SQLx and automatic schema migrations.
+- **Reliability**: Config validation on startup and `/health` endpoint for monitoring.
 
-## License
+## 📝 License
 
 MIT

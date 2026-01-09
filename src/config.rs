@@ -34,4 +34,16 @@ impl Config {
             clearurls_source,
         }
     }
+
+    pub fn validate(&self) {
+        if self.bot_token.is_empty() || !self.bot_token.contains(':') {
+            panic!("FATAL: TELOXIDE_TOKEN non è valido o è vuoto. Controlla il file .env");
+        }
+        if self.bot_username.is_empty() {
+            panic!("FATAL: BOT_USERNAME deve essere configurato");
+        }
+        if !self.dashboard_url.starts_with("http") {
+            panic!("FATAL: DASHBOARD_URL deve essere un URL valido (es. http://localhost:3000)");
+        }
+    }
 }

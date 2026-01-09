@@ -6,193 +6,236 @@
     <title>{{ tr.d_title }}</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f4f7f9; color: #333; }
-        header { background: #0088cc; color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        :root {
+            --primary: #0088cc;
+            --primary-hover: #0077b5;
+            --bg: #f4f7f9;
+            --card-bg: #ffffff;
+            --text: #333333;
+            --text-muted: #666666;
+            --border: #dfe3e8;
+            --success: #4caf50;
+            --danger: #f44336;
+            --shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #121212;
+                --card-bg: #1e1e1e;
+                --text: #e0e0e0;
+                --text-muted: #aaaaaa;
+                --border: #333333;
+                --shadow: 0 4px 6px rgba(0,0,0,0.3);
+            }
+        }
+
+        body { font-family: 'Inter', system-ui, sans-serif; margin: 0; padding: 0; background-color: var(--bg); color: --text; transition: background 0.3s; }
+        header { background: var(--primary); color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; box-shadow: var(--shadow); }
         .container { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
-        .card { background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 1.5rem; }
-        h2 { margin-top: 0; color: #0088cc; font-size: 1.25rem; border-bottom: 2px solid #f0f2f5; padding-bottom: 0.5rem; margin-bottom: 1rem; }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-item { background: #e3f2fd; padding: 1.5rem; border-radius: 12px; text-align: center; border: 1px solid #bbdefb; }
-        .stat-value { font-size: 2.2rem; font-weight: bold; color: #0088cc; }
-        .stat-label { font-size: 0.85rem; color: #546e7a; text-transform: uppercase; letter-spacing: 0.5px; }
-        .form-group { margin-bottom: 1.2rem; }
-        label { display: block; margin-bottom: 0.4rem; font-weight: 600; font-size: 0.9rem; }
-        input[type="text"], select, textarea { width: 100%; padding: 0.7rem; border: 1px solid #dfe3e8; border-radius: 8px; box-sizing: border-box; font-family: inherit; font-size: 0.95rem; }
-        button { background: #0088cc; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; cursor: pointer; font-weight: 600; transition: background 0.2s; }
-        button:hover { background: #0077b5; }
-        .history-table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; font-size: 0.9rem; }
-        .history-table th { text-align: left; padding: 0.8rem; background: #f8f9fa; border-bottom: 2px solid #eee; }
-        .history-table td { padding: 0.8rem; border-bottom: 1px solid #eee; word-break: break-all; }
-        .chat-list { list-style: none; padding: 0; margin: 0; }
-        .chat-item { display: flex; flex-direction: column; padding: 1rem 0; border-bottom: 1px solid #eee; }
-        .chat-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
-        .chat-controls { display: flex; gap: 0.5rem; align-items: center; }
-        .logout-btn { color: white; text-decoration: none; padding: 0.5rem 1rem; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; font-size: 0.9rem; }
-        .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: bold; }
-        .badge-green { background: #e8f5e9; color: #2e7d32; }
-        .badge-red { background: #ffebee; color: #c62828; }
+        .card { background: var(--card-bg); padding: 1.5rem; border-radius: 16px; box-shadow: var(--shadow); margin-bottom: 1.5rem; border: 1px solid var(--border); }
+        h2 { margin-top: 0; color: var(--primary); font-size: 1.2rem; display: flex; align-items: center; gap: 0.5rem; }
+        
+        /* Stats Styling */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-item { background: var(--card-bg); padding: 1.2rem; border-radius: 16px; text-align: center; border: 1px solid var(--border); position: relative; overflow: hidden; }
+        .stat-item::after { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 4px; background: var(--primary); opacity: 0.3; }
+        .stat-value { font-size: 2rem; font-weight: 800; color: var(--primary); }
+        .stat-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; }
+
+        /* Form Controls */
+        input, select, textarea { width: 100%; padding: 0.8rem; border: 1px solid var(--border); border-radius: 10px; background: var(--card-bg); color: var(--text); font-size: 0.95rem; }
+        button { background: var(--primary); color: white; border: none; padding: 0.8rem 1.5rem; border-radius: 10px; cursor: pointer; font-weight: 700; transition: transform 0.1s, background 0.2s; }
+        button:hover { background: var(--primary-hover); transform: translateY(-1px); }
+        button:active { transform: translateY(0); }
+
+        /* A11y: focus ring */
+        *:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+
+        /* Toast Notifications */
+        #toast-container { position: fixed; bottom: 2rem; right: 2rem; z-index: 1000; }
+        .toast { background: var(--card-bg); border-left: 5px solid var(--primary); padding: 1rem 1.5rem; border-radius: 8px; box-shadow: 0 10px 15px rgba(0,0,0,0.1); margin-bottom: 0.5rem; animation: slideIn 0.3s ease-out; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        .history-table { width: 100%; border-collapse: collapse; }
+        .history-table th { text-align: left; padding: 1rem; color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+        .history-table td { padding: 1rem; border-bottom: 1px solid var(--border); }
+        .url-text { font-family: monospace; font-size: 0.85rem; word-break: break-all; }
     </style>
 </head>
 <body>
-    <header>
-        <div style="font-weight: bold; font-size: 1.4rem;">🛡️ ClearURLs Pro</div>
-        <div style="display: flex; align-items: center; gap: 1.5rem;">
+    <header role="banner">
+        <div style="font-weight: 900; font-size: 1.5rem; letter-spacing: -0.5px;">🛡️ ClearURLs <span style="font-weight: 300; opacity: 0.8;">PRO</span></div>
+        <nav style="display: flex; align-items: center; gap: 1.5rem;">
             {% if user.id == admin_id %}
-                <a href="/admin" style="color: #ff9800; text-decoration: none; font-weight: bold;">ADMIN</a>
+                <a href="/admin" class="logout-btn" style="border-color: #ff9800; color: #ff9800;">ADMIN</a>
             {% endif %}
-            <span>{{ user.first_name }}</span>
-            <a href="/logout" class="logout-btn">Logout</a>
-        </div>
+            <span aria-label="User profile">{{ user.first_name }}</span>
+            <a href="/logout" class="logout-btn" aria-label="Logout">Logout</a>
+        </nav>
     </header>
 
-    <div class="container">
+    <main class="container" role="main">
         <div class="stats-grid">
-            <div class="stat-item">
-                <div class="stat-value">{{ config.cleaned_count }}</div>
+            <div class="stat-item" aria-live="polite">
+                <div class="stat-value" id="count-total">{{ config.cleaned_count }}</div>
                 <div class="stat-label">{{ tr.d_links_cleaned }}</div>
             </div>
             <div class="stat-item">
                 <div class="stat-value">{{ chats.len() }}</div>
                 <div class="stat-label">{{ tr.d_active_chats }}</div>
             </div>
-            <div class="stat-item">
-                <a href="/dashboard/export" style="text-decoration: none;">
-                    <div class="stat-value">📥</div>
-                    <div class="stat-label">Export CSV</div>
-                </a>
+            <div class="stat-item" style="cursor: pointer;" onclick="location.href='/dashboard/export'" role="button" aria-label="Export history to CSV">
+                <div class="stat-value">📥</div>
+                <div class="stat-label">Export CSV</div>
             </div>
-            <div class="card" style="grid-column: span 1; margin-bottom: 0; padding: 1rem;">
-                <canvas id="statsChart" height="80"></canvas>
+            <div class="card" style="grid-column: span 1; margin-bottom: 0; padding: 1rem; min-height: 120px;">
+                <canvas id="statsChart"></canvas>
             </div>
         </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
-            <div class="card">
-                <h2>{{ tr.d_global_settings }}</h2>
-                <form action="/dashboard/update" method="POST">
-                    <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem;">
-                        <input type="checkbox" id="enabled" name="enabled" {% if config.enabled %}checked{% endif %}>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem;">
+            <section class="card" aria-labelledby="settings-title">
+                <h2 id="settings-title">⚙️ {{ tr.d_global_settings }}</h2>
+                <form action="/dashboard/update" method="POST" id="config-form">
+                    <div class="form-group" style="display: flex; align-items: center; gap: 0.7rem; margin-bottom: 1.5rem;">
+                        <input type="checkbox" id="enabled" name="enabled" {% if config.enabled %}checked{% endif %} style="width: auto;">
                         <label for="enabled" style="margin:0;">{{ tr.d_enable_bot }}</label>
                     </div>
                     <div class="form-group">
-                        <label>{{ tr.d_action_mode }}</label>
-                        <select name="mode">
+                        <label for="mode-select">{{ tr.d_action_mode }}</label>
+                        <select name="mode" id="mode-select">
                             <option value="reply" {% if config.mode == "reply" %}selected{% endif %}>{{ tr.d_mode_reply }}</option>
                             <option value="delete" {% if config.mode == "delete" %}selected{% endif %}>{{ tr.d_mode_delete }}</option>
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>Language / Lingua</label>
-                        <select name="language">
+                        <label for="lang-select">Language / Lingua</label>
+                        <select name="language" id="lang-select">
                             <option value="en" {% if config.language == "en" %}selected{% endif %}>English</option>
                             <option value="it" {% if config.language == "it" %}selected{% endif %}>Italiano</option>
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label for="ignored_domains">{{ tr.d_ignored_domains }}</label>
-                        <textarea id="ignored_domains" name="ignored_domains" rows="2">{{ config.ignored_domains }}</textarea>
-                    </div>
                     <button type="submit">{{ tr.d_save }}</button>
                 </form>
+            </section>
 
-                <h2 style="margin-top: 2rem;">Custom Parameters (Auto-Remove)</h2>
-                <form action="/dashboard/custom_rule/add" method="POST" style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
-                    <input type="text" name="pattern" placeholder="e.g. fbclid, utm_source" required>
-                    <button type="submit">Add</button>
-                </form>
-                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
-                    {% for rule in custom_rules %}
-                        <div class="badge badge-green" style="display: flex; align-items: center; gap: 0.5rem;">
-                            {{ rule.pattern }}
-                            <form action="/dashboard/custom_rule/delete/{{ rule.id }}" method="POST" style="display: inline;">
-                                <button type="submit" style="background:none; color: #c62828; padding:0; font-size: 1rem; line-height: 1;">×</button>
-                            </form>
-                        </div>
-                    {% endfor %}
-                </div>
-            </div>
-
-            <div class="card">
-                <h2>{{ tr.d_managed_chats }}</h2>
+            <section class="card" aria-labelledby="chats-title">
+                <h2 id="chats-title">💬 {{ tr.d_managed_chats }}</h2>
                 {% if chats.is_empty() %}
-                    <p style="color: #666;">{{ tr.d_no_chats }}</p>
+                    <p style="color: var(--text-muted); text-align: center; padding: 2rem;">{{ tr.d_no_chats }}</p>
                 {% else %}
-                    <ul class="chat-list">
+                    <div class="chat-list">
                     {% for chat in chats %}
-                        <li class="chat-item">
+                        <div class="chat-item">
                             <div class="chat-header">
-                                <span style="font-weight: 500;">
-                                {% if let Some(title) = chat.title %}
-                                    {{ title }}
-                                {% else %}
-                                    Chat
-                                {% endif %}
-                            </span>
+                                <span style="font-weight: 700;">
+                                    {% if let Some(title) = chat.title %}{{ title }}{% else %}Private Chat{% endif %}
+                                </span>
                                 <form action="/dashboard/chat/toggle/{{ chat.chat_id }}" method="POST">
-                                    <button type="submit" style="background: {% if chat.enabled %}#4caf50{% else %}#f44336{% endif %}; padding: 0.2rem 0.5rem; font-size: 0.75rem;">
+                                    <button type="submit" style="background: {% if chat.enabled %}var(--success){% else %}var(--danger){% endif %}; padding: 0.3rem 0.7rem; font-size: 0.7rem; border-radius: 20px;">
                                         {% if chat.enabled %}ACTIVE{% else %}PAUSED{% endif %}
                                     </button>
                                 </form>
                             </div>
-                            <form action="/dashboard/chat/mode/{{ chat.chat_id }}" method="POST" style="display: flex; gap: 0.5rem;">
-                                <select name="mode" style="padding: 0.3rem; font-size: 0.85rem;" onchange="this.form.submit()">
-                                    <option value="default" {% if chat.mode == "default" %}selected{% endif %}>Use Global Mode</option>
-                                    <option value="reply" {% if chat.mode == "reply" %}selected{% endif %}>Always Reply</option>
-                                    <option value="delete" {% if chat.mode == "delete" %}selected{% endif %}>Always Delete</option>
+                            <form action="/dashboard/chat/mode/{{ chat.chat_id }}" method="POST">
+                                <select name="mode" style="padding: 0.4rem; font-size: 0.8rem; border-radius: 8px;" onchange="this.form.submit()">
+                                    <option value="default" {% if chat.mode == "default" %}selected{% endif %}>Global Settings</option>
+                                    <option value="reply" {% if chat.mode == "reply" %}selected{% endif %}>Reply Only</option>
+                                    <option value="delete" {% if chat.mode == "delete" %}selected{% endif %}>Delete & Repost</option>
                                 </select>
                             </form>
-                        </li>
+                        </div>
                     {% endfor %}
-                    </ul>
+                    </div>
                 {% endif %}
-            </div>
+            </section>
         </div>
 
-        <div class="card">
-            <h2>{{ tr.d_history }}</h2>
-            <table class="history-table">
-                <thead>
-                    <tr>
-                        <th style="width: 35%;">Original</th>
-                        <th style="width: 35%;">Cleaned</th>
-                        <th style="width: 30%;">Provider</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for link in history %}
-                    <tr>
-                        <td style="color: #f44336; font-size: 0.75rem;">{{ link.original_url }}</td>
-                        <td style="color: #4caf50; font-weight: 500;">{{ link.cleaned_url }}</td>
-                        <td><span class="badge badge-green">{{ link.provider_name.clone().unwrap_or_default() }}</span></td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
+        <section class="card" style="margin-top: 1.5rem;" aria-labelledby="history-title">
+            <h2 id="history-title">🕒 {{ tr.d_history }}</h2>
+            <div style="overflow-x: auto;">
+                <table class="history-table">
+                    <thead>
+                        <tr>
+                            <th>URL Originale</th>
+                            <th>Pulito</th>
+                            <th>Provider</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-body">
+                        {% for link in history %}
+                        <tr>
+                            <td class="url-text" style="color: var(--danger); opacity: 0.8;">{{ link.original_url }}</td>
+                            <td class="url-text" style="color: var(--success); font-weight: 600;">{{ link.cleaned_url }}</td>
+                            <td><span class="badge badge-green" style="background: var(--primary); color: white; opacity: 0.9;">{{ link.provider_name.clone().unwrap_or_default() }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <div id="toast-container" aria-live="assertive"></div>
 
     <script>
+        function showToast(message) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerText = message;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        // Initialize Chart
         const ctx = document.getElementById('statsChart').getContext('2d');
-        const chart = new Chart(ctx, {
+        window.chart = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: [{% for stat in stats_by_day %}'{{ stat.0 }}',{% endfor %}],
                 datasets: [{
-                    label: 'Cleaned Links',
                     data: [{% for stat in stats_by_day %}{{ stat.1 }},{% endfor %}],
                     borderColor: '#0088cc',
                     backgroundColor: 'rgba(0, 136, 204, 0.1)',
                     tension: 0.4,
-                    fill: true
+                    fill: true,
+                    pointRadius: 0
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: { legend: { display: false } },
-                scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+                scales: { 
+                    y: { display: false },
+                    x: { grid: { display: false }, ticks: { color: '#888', font: { size: 10 } } }
+                }
             }
         });
+
+        // SSE Real-time Updates
+        const eventSource = new EventSource('/events');
+        eventSource.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            showToast("✨ New link cleaned!");
+            
+            // Update stats
+            const countEl = document.getElementById('count-total');
+            if (countEl) countEl.innerText = parseInt(countEl.innerText) + 1;
+
+            // Table update
+            const tbody = document.getElementById('history-body');
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td class="url-text" style="color: var(--danger); opacity: 0.8;">${data.original_url}</td>
+                <td class="url-text" style="color: var(--success); font-weight: 600;">${data.cleaned_url}</td>
+                <td><span class="badge badge-green" style="background: var(--primary); color: white; opacity: 0.9;">${data.provider_name}</span></td>
+            `;
+            tbody.insertBefore(row, tbody.firstChild);
+            if (tbody.children.length > 10) tbody.removeChild(tbody.lastChild);
+        };
     </script>
 </body>
 </html>

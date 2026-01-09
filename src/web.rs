@@ -1,6 +1,6 @@
 use axum::{
     extract::{State, Query, FromRef},
-    response::{Html, Redirect, IntoResponse, Response},
+    response::{Html, Redirect, IntoResponse, Response, sse::{Event, Sse}},
     routing::{get, post},
     Router,
     Form,
@@ -15,12 +15,15 @@ use tracing::info;
 use hex;
 use tower_http::set_header::SetResponseHeaderLayer;
 use time::Duration;
+use futures::stream::Stream;
+use std::convert::Infallible;
 
 #[derive(Clone)]
 pub struct AppState {
     pub db: Db,
     pub config: Config,
     pub key: Key,
+    pub event_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
 }
 
 impl FromRef<AppState> for Key {
@@ -61,17 +64,20 @@ struct CustomRuleForm {
     pattern: String,
 }
 
-pub async fn run_server(config: Config, db: Db) {
+pub async fn run_server(config: Config, db: Db, event_tx: tokio::sync::broadcast::Sender<serde_json::Value>) {
     let key = Key::generate();
     
     let state = AppState {
         db,
         config: config.clone(),
         key,
+        event_tx,
     };
 
     let app = Router::new()
         .route("/", get(index))
+        .route("/health", get(|| async { "OK" }))
+        .route("/events", get(events_handler))
         .route("/login", get(login_page))
         .route("/favicon.ico", get(|| async { axum::http::StatusCode::NO_CONTENT }))
         .route("/auth/telegram/callback", get(auth_callback))
@@ -326,6 +332,31 @@ async fn export_history(
         }
     }
     Redirect::to("/login").into_response()
+}
+
+async fn events_handler(
+    State(state): State<AppState>,
+    jar: SignedCookieJar,
+) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+    let user_id = if let Some(user_cookie) = jar.get("user_session") {
+        if let Ok(user) = serde_json::from_str::<TelegramUserSession>(user_cookie.value()) {
+            user.id
+        } else { 0 }
+    } else { 0 };
+
+    let mut rx = state.event_tx.subscribe();
+
+    let stream = async_stream::stream! {
+        while let Ok(msg) = rx.recv().await {
+            if let Some(target_user_id) = msg.get("user_id").and_then(|id| id.as_i64()) {
+                if target_user_id == user_id {
+                    yield Ok(Event::default().json_data(msg).unwrap());
+                }
+            }
+        }
+    };
+
+    Sse::new(stream).keep_alive(axum::response::sse::KeepAlive::new())
 }
 
 fn verify_telegram_auth(params: &HashMap<String, String>, token: &str) -> bool {

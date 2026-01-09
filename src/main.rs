@@ -21,13 +21,17 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let config = Config::from_env();
+    config.validate();
     
     let db = Db::new(&config.database_url).await?;
     let rules = RuleEngine::new(&config.clearurls_source).await?;
     let bot = Bot::new(&config.bot_token);
     
-    let bot_task = bot::run_bot(bot, db.clone(), rules.clone(), config.clone());
-    let web_task = web::run_server(config, db);
+    // Canale per eventi real-time (SSE)
+    let (event_tx, _) = tokio::sync::broadcast::channel::<serde_json::Value>(100);
+
+    let bot_task = bot::run_bot(bot, db.clone(), rules.clone(), config.clone(), event_tx.clone());
+    let web_task = web::run_server(config, db, event_tx);
 
     let rules_clone = rules.clone();
     let refresh_task = tokio::spawn(async move {
