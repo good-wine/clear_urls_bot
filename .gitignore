@@ -1,0 +1,5 @@
+/target
+/bot.db
+/bot.db-shm
+/bot.db-wal
+.env

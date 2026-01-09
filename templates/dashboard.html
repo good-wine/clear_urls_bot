@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClearURLs Bot Dashboard</title>
+    <style>
+        body { font-family: sans-serif; margin: 0; padding: 0; background-color: #f0f2f5; }
+        header { background: #0088cc; color: white; padding: 1rem; display: flex; justify-content: space-between; align-items: center; }
+        .container { max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+        .card { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 1rem; }
+        h2 { margin-top: 0; }
+        .form-group { margin-bottom: 1rem; }
+        label { display: block; margin-bottom: 0.5rem; font-weight: bold; }
+        input[type="text"], select, textarea { width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; font-family: inherit; }
+        button { background: #0088cc; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #006699; }
+        .toggle { display: flex; align-items: center; gap: 0.5rem; }
+        .logout { color: white; text-decoration: none; }
+        .hint { font-size: 0.85rem; color: #666; margin-top: 0.25rem; }
+    </style>
+</head>
+<body>
+    <header>
+        <div>ClearURLs Bot</div>
+        <div>
+            <span>Welcome, {{ user.first_name }}</span>
+            <a href="/logout" class="logout" style="margin-left: 1rem;">Logout</a>
+        </div>
+    </header>
+    <div class="container">
+        <div class="card">
+            <h2>Global Settings</h2>
+            <form action="/dashboard/update" method="POST">
+                <div class="form-group toggle">
+                    <input type="checkbox" id="enabled" name="enabled" {% if config.enabled %}checked{% endif %}>
+                    <label for="enabled" style="margin:0;">Enable Bot for your messages</label>
+                </div>
+                <div class="form-group">
+                    <label>Action Mode</label>
+                    <select name="mode">
+                        <option value="reply" {% if config.mode == "reply" %}selected{% endif %}>Reply with Clean Link</option>
+                        <option value="delete" {% if config.mode == "delete" %}selected{% endif %}>Delete & Repost (Requires Admin)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="ignored_domains">Ignored Domains (Whitelist)</label>
+                    <textarea id="ignored_domains" name="ignored_domains" rows="3" placeholder="e.g. internal.company.com, myprivate.site">{{ config.ignored_domains }}</textarea>
+                    <div class="hint">Comma-separated list of domains that the bot should ignore.</div>
+                </div>
+                <button type="submit">Save Settings</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>Your Managed Chats</h2>
+            <p>Chats where you added the bot:</p>
+            {% if chats.is_empty() %}
+                <p>No chats found.</p>
+            {% else %}
+                <ul>
+                {% for chat in chats %}
+                    <li>
+                        {% if let Some(title) = chat.title %}
+                            {{ title }}
+                        {% else %}
+                            Chat ID: {{ chat.chat_id }}
+                        {% endif %}
+                        {% if !chat.enabled %}(Disabled){% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>
