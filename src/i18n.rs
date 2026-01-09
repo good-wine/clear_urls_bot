@@ -12,6 +12,7 @@ pub struct Translations {
     pub d_action_mode: &'static str,
     pub d_mode_reply: &'static str,
     pub d_mode_delete: &'static str,
+    #[allow(dead_code)]
     pub d_ignored_domains: &'static str,
     pub d_save: &'static str,
     pub d_history: &'static str,

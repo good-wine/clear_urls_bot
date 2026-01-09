@@ -53,6 +53,7 @@ struct DashboardTemplate {
     config: UserConfig,
     chats: Vec<ChatConfig>,
     history: Vec<crate::models::CleanedLink>,
+    #[allow(dead_code)]
     custom_rules: Vec<crate::models::CustomRule>,
     stats_by_day: Vec<(String, i64)>,
     admin_id: i64,
