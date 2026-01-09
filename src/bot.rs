@@ -1,11 +1,11 @@
 use teloxide::{prelude::*, types::{MessageEntityKind, ParseMode}, utils::html};
-use crate::{sanitizer::RuleEngine, db::Db, models::ChatConfig, i18n};
-use url::Url;
+use crate::{sanitizer::RuleEngine, ai_sanitizer::AiEngine, db::Db, models::ChatConfig, i18n};
 
 pub async fn run_bot(
     bot: Bot, 
     db: Db, 
     rules: RuleEngine, 
+    ai: AiEngine,
     config: crate::config::Config,
     event_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
 ) {
@@ -13,7 +13,7 @@ pub async fn run_bot(
         .endpoint(handle_message);
 
     Dispatcher::builder(bot, handler)
-        .dependencies(dptree::deps![db, rules, config, event_tx])
+        .dependencies(dptree::deps![db, rules, ai, config, event_tx])
         .enable_ctrlc_handler()
         .build()
         .dispatch()
@@ -25,6 +25,7 @@ async fn handle_message(
     msg: Message,
     db: Db,
     rules: RuleEngine,
+    ai: AiEngine,
     config: crate::config::Config,
     event_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
 ) -> ResponseResult<()> {
@@ -128,7 +129,7 @@ async fn handle_message(
     let utf16: Vec<u16> = text.encode_utf16().collect();
 
     for entity in entities {
-        let mut url_str = match &entity.kind {
+        let url_str = match &entity.kind {
             MessageEntityKind::Url => {
                 let start = entity.offset;
                 let end = start + entity.length;
@@ -142,50 +143,28 @@ async fn handle_message(
         };
 
         let original_url_str = url_str.clone();
+        let mut current_url = url_str;
 
-        // 1. Custom User Rules
-        if let Ok(mut parsed) = Url::parse(&url_str) {
-            let mut custom_changed = false;
-            let query_pairs: Vec<(String, String)> = parsed.query_pairs().into_owned().collect();
-            let mut new_query = url::form_urlencoded::Serializer::new(String::new());
-            
-            for (key, value) in query_pairs {
-                let mut keep = true;
-                for crule in &custom_rules {
-                    if key.contains(&crule.pattern) {
-                        keep = false;
-                        custom_changed = true;
-                        break;
-                    }
-                }
-                if keep {
-                    new_query.append_pair(&key, &value);
-                }
-            }
+        if let Some((cleaned, provider)) = rules.sanitize(&current_url, &custom_rules, &ignored_domains) {
+             current_url = cleaned;
+             
+             // 3. AI Deep Scan (if enabled and standard rules/custom rules changed something OR we want it as final pass)
+             if user_config.ai_enabled && config.ai_api_key.is_some() {
+                 if let Ok(Some(ai_cleaned)) = ai.sanitize(&current_url).await {
+                     current_url = ai_cleaned;
+                     // We keep the provider name but mark AI was involved
+                     let provider_name = format!("AI ({})", provider);
+                     cleaned_urls.push((original_url_str, current_url, provider_name));
+                     continue;
+                 }
+             }
 
-            if custom_changed {
-                parsed.set_query(Some(&new_query.finish()));
-                url_str = parsed.to_string();
-            }
-        }
-
-        // 2. Global ClearURLs rules
-        if let Ok(parsed) = Url::parse(&url_str) {
-            if let Some(host) = parsed.host_str() {
-                if ignored_domains.iter().any(|d| host.contains(d)) {
-                    continue;
-                }
-            }
-        }
-
-        let mut provider_name = String::from("Custom");
-        if let Some((cleaned, provider)) = rules.sanitize(&url_str) {
-             url_str = cleaned;
-             provider_name = provider;
-        }
-
-        if url_str != original_url_str {
-            cleaned_urls.push((original_url_str, url_str, provider_name));
+             cleaned_urls.push((original_url_str, current_url, provider));
+        } else if user_config.ai_enabled && config.ai_api_key.is_some() {
+             // If standard rules didn't change it, maybe AI can
+             if let Ok(Some(ai_cleaned)) = ai.sanitize(&current_url).await {
+                 cleaned_urls.push((original_url_str, ai_cleaned, "AI (Deep Scan)".to_string()));
+             }
         }
     }
 

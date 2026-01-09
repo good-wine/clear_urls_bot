@@ -5,6 +5,7 @@ use sqlx::FromRow;
 pub struct UserConfig {
     pub user_id: i64,
     pub enabled: bool,
+    pub ai_enabled: bool,
     pub mode: String, // "reply" or "delete"
     pub ignored_domains: String, // Comma-separated list
     pub cleaned_count: i64,

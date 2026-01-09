@@ -241,6 +241,7 @@ async fn logout(_state: State<AppState>, jar: SignedCookieJar) -> impl IntoRespo
 #[derive(serde::Deserialize)]
 struct UpdateForm {
     enabled: Option<String>,
+    ai_enabled: Option<String>,
     mode: String,
     ignored_domains: String,
     language: String,
@@ -255,9 +256,11 @@ async fn update_config(
         if let Ok(user) = serde_json::from_str::<TelegramUserSession>(user_cookie.value()) {
             let user_config = state.db.get_user_config(user.id).await.unwrap_or_default();
             let enabled = form.enabled.is_some();
+            let ai_enabled = form.ai_enabled.is_some();
             let config = UserConfig {
                 user_id: user.id,
                 enabled,
+                ai_enabled,
                 mode: form.mode,
                 ignored_domains: form.ignored_domains,
                 cleaned_count: user_config.cleaned_count,

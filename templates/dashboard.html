@@ -98,9 +98,13 @@
             <section class="card" aria-labelledby="settings-title">
                 <h2 id="settings-title">⚙️ {{ tr.d_global_settings }}</h2>
                 <form action="/dashboard/update" method="POST" id="config-form">
-                    <div class="form-group" style="display: flex; align-items: center; gap: 0.7rem; margin-bottom: 1.5rem;">
+                    <div class="form-group" style="display: flex; align-items: center; gap: 0.7rem; margin-bottom: 0.5rem;">
                         <input type="checkbox" id="enabled" name="enabled" {% if config.enabled %}checked{% endif %} style="width: auto;">
                         <label for="enabled" style="margin:0;">{{ tr.d_enable_bot }}</label>
+                    </div>
+                    <div class="form-group" style="display: flex; align-items: center; gap: 0.7rem; margin-bottom: 1.5rem;">
+                        <input type="checkbox" id="ai_enabled" name="ai_enabled" {% if config.ai_enabled %}checked{% endif %} style="width: auto;">
+                        <label for="ai_enabled" style="margin:0;">{{ tr.d_enable_ai }}</label>
                     </div>
                     <div class="form-group">
                         <label for="mode-select">{{ tr.d_action_mode }}</label>

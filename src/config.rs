@@ -10,6 +10,9 @@ pub struct Config {
     pub dashboard_url: String,
     pub admin_id: i64,
     pub clearurls_source: String,
+    pub ai_api_key: Option<String>,
+    pub ai_api_base: String,
+    pub ai_model: String,
 }
 
 impl Config {
@@ -23,6 +26,9 @@ impl Config {
         let dashboard_url = env::var("DASHBOARD_URL").unwrap_or_else(|_| "http://127.0.0.1:3000".to_string());
         let admin_id = env::var("ADMIN_ID").unwrap_or_else(|_| "0".to_string()).parse().unwrap_or(0);
         let clearurls_source = env::var("CLEARURLS_SOURCE").unwrap_or_else(|_| "https://raw.githubusercontent.com/ClearURLs/Rules/refs/heads/master/data.min.json".to_string());
+        let ai_api_key = env::var("AI_API_KEY").ok();
+        let ai_api_base = env::var("AI_API_BASE").unwrap_or_else(|_| "https://api.openai.com/v1".to_string());
+        let ai_model = env::var("AI_MODEL").unwrap_or_else(|_| "gpt-3.5-turbo".to_string());
 
         Self {
             bot_token,
@@ -32,6 +38,9 @@ impl Config {
             dashboard_url,
             admin_id,
             clearurls_source,
+            ai_api_key,
+            ai_api_base,
+            ai_model,
         }
     }
 

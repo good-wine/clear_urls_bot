@@ -9,6 +9,7 @@ A professional, high-performance Rust-based Telegram bot that automatically remo
 - **Modern UI/UX with Dark Mode**: Responsive design that automatically adapts to system themes (Light/Dark).
 - **Multi-Language Support**: Full i18n support for Italian and English.
 - **Granular Control**: Per-chat configuration (Reply/Delete modes) and custom tracking parameter removal.
+- **AI Deep Scan**: Optional AI-powered sanitization for complex tracking parameters not covered by standard rules.
 - **Deep Auditing**: Track which provider (Amazon, Google, etc.) cleaned each link.
 - **CSV Export**: Download your full cleaning history for personal analysis.
 - **Enterprise Ready**: Multi-stage Docker build and automatic configuration validation.
@@ -24,6 +25,7 @@ A professional, high-performance Rust-based Telegram bot that automatically remo
 1. **Clone & Configure**:
    - Copy `.env.example` to `.env`.
    - Set `TELOXIDE_TOKEN`, `BOT_USERNAME`, `DASHBOARD_URL`, and `ADMIN_ID`.
+   - (Optional) Set `AI_API_KEY`, `AI_API_BASE`, and `AI_MODEL` for AI Deep Scan.
 2. **Setup Telegram Domain**:
    - Use `/setdomain` in [@BotFather](https://t.me/BotFather) to point to your `DASHBOARD_URL`.
 3. **Run with Docker**:
