@@ -1,50 +1,51 @@
-# ClearURLs Telegram Bot
+# ClearURLs Telegram Bot 🛡️
 
-A Rust-based Telegram bot that automatically removes tracking parameters from URLs using the ClearURLs ruleset. Includes a web dashboard for configuration and management.
+A high-performance Rust-based Telegram bot that automatically removes tracking parameters from URLs using the ClearURLs ruleset. Features a secure web dashboard for user management and real-time statistics.
 
 ## Features
 
-- **Automatic Sanitization**: Detects URLs in private chats, groups, and channels and strips tracking parameters.
-- **ClearURLs Rules**: Uses the official `data.min.json` from the ClearURLs project.
-- **Web Dashboard**: Manage your personal settings and see active chats via a Telegram Login interface.
+- **Automatic Sanitization**: Detects and cleans URLs in private chats, groups, and channels.
+- **Media Support**: Automatically cleans links found in **captions** of photos, videos, documents, and audio files.
+- **Auto-Updating Rules**: Background task refreshes the ClearURLs ruleset every 24 hours without service interruption.
+- **Real-time Statistics**: Tracks the total number of links cleaned per user, visible both on the web dashboard and via bot commands.
+- **Web Dashboard**: Secure Material-style interface to manage personal settings and view cleaning stats.
 - **Action Modes**:
-  - `Reply`: The bot replies to the message with cleaned links.
-  - `Delete & Repost`: The bot deletes the original message and posts the cleaned version (requires Delete Messages permission).
-- **Global Toggle**: Enable or disable the bot for your own messages or specific chats.
+  - `Reply`: The bot replies with the cleaned version of the links.
+  - `Delete & Repost`: Deletes the original message and posts a clean version (requires "Delete Messages" permission).
+- **Global Toggle & Whitelist**: Enable/disable the bot or specify domains that should never be cleaned.
+
+## Bot Commands
+
+- `/start` - Initial setup and direct link to the secure dashboard.
+- `/help` - Show usage instructions and available commands.
+- `/stats` - View your personal cleaning statistics directly in Telegram.
 
 ## Setup
 
-1. **Clone the repository** (or copy the files).
-2. **Install Rust**: Ensure you have the latest stable Rust toolchain.
-3. **Configure Environment**:
+1. **Clone the repository**.
+2. **Configure Environment**:
    - Copy `.env.example` to `.env`.
    - Create a bot via [@BotFather](https://t.me/BotFather) and get the token.
-   - Set `TELOXIDE_TOKEN` and `BOT_USERNAME` in `.env`.
-4. **Setup Telegram Login**:
-   - In @BotFather, use `/setdomain` to link your dashboard domain (e.g., `https://your-domain.com` or `http://localhost:3000` for testing) to your bot.
-5. **Run the application**:
+   - Set `TELOXIDE_TOKEN`, `BOT_USERNAME`, and `DASHBOARD_URL` in `.env`.
+   - *Note: For local development, use `http://127.0.0.1:3000`.*
+3. **Setup Telegram Login**:
+   - In @BotFather, use `/setdomain` to link your `DASHBOARD_URL` (e.g., `http://127.0.0.1:3000`) to your bot. This is required for the Telegram Login widget.
+4. **Run the application**:
    ```bash
    cargo run --release
    ```
 
-## Configuration
+## Technical Architecture
 
-The bot uses SQLite by default (`bot.db`). On first run, it will automatically create the necessary tables.
-
-## Dashboard
-
-Access the dashboard at `http://localhost:3000` (or your configured `SERVER_ADDR`). Log in with Telegram to:
-- Toggle the bot globally for your account.
-- Switch between "Reply" and "Delete & Repost" modes.
-- View chats where the bot has been active.
-
-## Technical Details
-
-- **Language**: Rust
-- **Telegram Library**: [teloxide](https://github.com/teloxide/teloxide)
-- **Web Framework**: [axum](https://github.com/tokio-rs/axum)
-- **Database**: [sqlx](https://github.com/launchbadge/sqlx) (SQLite)
-- **Rules Engine**: Custom regex-based implementation parsing ClearURLs JSON.
+- **Language**: Rust (Edition 2021)
+- **Telegram Framework**: [teloxide](https://github.com/teloxide/teloxide)
+- **Web Server**: [axum](https://github.com/tokio-rs/axum) with `tower-http` security layers.
+- **Security**:
+  - Strict **Content Security Policy (CSP)** for Telegram OAuth.
+  - Signed, HttpOnly, and SameSite session cookies.
+  - HMAC-SHA256 authentication verification with replay attack protection.
+- **Database**: [sqlx](https://github.com/launchbadge/sqlx) (SQLite) with automatic migrations.
+- **Rules Engine**: Concurrent regex-based engine with `RwLock` for zero-downtime updates.
 
 ## License
 
