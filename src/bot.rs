@@ -26,19 +26,46 @@ async fn handle_message(
 
     // Handle /start command in private chat
     if let Some(text) = msg.text() {
-        if text == "/start" && msg.chat.is_private() {
-            let keyboard = teloxide::types::InlineKeyboardMarkup::new(vec![vec![
-                teloxide::types::InlineKeyboardButton::url(
-                    "🚀 Apri Dashboard",
-                    config.dashboard_url.parse().unwrap(),
-                )
-            ]]);
+        if text.starts_with('/') && msg.chat.is_private() {
+            match text {
+                "/start" => {
+                    let keyboard = teloxide::types::InlineKeyboardMarkup::new(vec![vec![
+                        teloxide::types::InlineKeyboardButton::url(
+                            "🚀 Apri Dashboard",
+                            config.dashboard_url.parse().unwrap(),
+                        )
+                    ]]);
 
-            bot.send_message(chat_id, "<b>Benvenuto nel gestore ClearURLs!</b>\n\nPuoi configurare il bot e gestire i tuoi link puliti direttamente dal dashboard web protetto.")
-                .parse_mode(ParseMode::Html)
-                .reply_markup(keyboard)
-                .await?;
-            return Ok(());
+                    bot.send_message(chat_id, "<b>Benvenuto nel gestore ClearURLs!</b>\n\nPuoi configurare il bot e gestire i tuoi link puliti direttamente dal dashboard web protetto.")
+                        .parse_mode(ParseMode::Html)
+                        .reply_markup(keyboard)
+                        .await?;
+                    return Ok(());
+                }
+                "/help" => {
+                    let help_text = "<b>Guida ClearURLs Bot</b> 🛡️\n\n\
+                        Questo bot rimuove automaticamente i parametri di tracciamento dai link che invii.\n\n\
+                        <b>Comandi:</b>\n\
+                        /start - Inizia e ricevi il link al dashboard\n\
+                        /help - Mostra questo messaggio\n\
+                        /stats - Visualizza le tue statistiche di pulizia\n\n\
+                        Puoi usarmi in chat privata o aggiungermi ai gruppi!";
+                    bot.send_message(chat_id, help_text).parse_mode(ParseMode::Html).await?;
+                    return Ok(());
+                }
+                "/stats" => {
+                    let user_config = db.get_user_config(user_id).await.unwrap_or_default();
+                    let stats_text = format!(
+                        "<b>Le tue statistiche</b> 📊\n\n\
+                        Link puliti finora: <b>{}</b>\n\n\
+                        Grazie per proteggere la tua privacy!",
+                        user_config.cleaned_count
+                    );
+                    bot.send_message(chat_id, stats_text).parse_mode(ParseMode::Html).await?;
+                    return Ok(());
+                }
+                _ => {}
+            }
         }
     }
     // Persist/Update chat info
@@ -62,12 +89,15 @@ async fn handle_message(
         return Ok(())
     }
 
-    let text = match msg.text() {
-        Some(t) => t,
-        None => return Ok(()),
+    let (text, entities) = if let Some(t) = msg.text() {
+        (t, msg.entities())
+    } else if let Some(c) = msg.caption() {
+        (c, msg.caption_entities())
+    } else {
+        return Ok(());
     };
 
-    let entities = match msg.entities() {
+    let entities = match entities {
         Some(e) => e,
         None => return Ok(()),
     };
@@ -112,6 +142,9 @@ async fn handle_message(
     if cleaned_urls.is_empty() {
         return Ok(())
     }
+
+    // Increment stats
+    let _ = db.increment_cleaned_count(user_id, cleaned_urls.len() as i64).await;
 
     let mode = user_config.map(|c| c.mode).unwrap_or("reply".to_string());
 

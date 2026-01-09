@@ -1,12 +1,13 @@
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
-#[derive(Debug, Serialize, Deserialize, Clone, FromRow)]
+#[derive(Debug, Serialize, Deserialize, Clone, FromRow, Default)]
 pub struct UserConfig {
     pub user_id: i64,
     pub enabled: bool,
     pub mode: String, // "reply" or "delete"
     pub ignored_domains: String, // Comma-separated list
+    pub cleaned_count: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, FromRow)]

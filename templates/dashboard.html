@@ -29,6 +29,17 @@
         </div>
     </header>
     <div class="container">
+        <div class="card stats-card" style="display: flex; justify-content: space-around; text-align: center; background: #e3f2fd; border: 1px solid #bbdefb;">
+            <div>
+                <div style="font-size: 0.9rem; color: #546e7a;">Links Cleaned</div>
+                <div style="font-size: 2rem; font-weight: bold; color: #0088cc;">{{ config.cleaned_count }}</div>
+            </div>
+            <div>
+                <div style="font-size: 0.9rem; color: #546e7a;">Active in Chats</div>
+                <div style="font-size: 2rem; font-weight: bold; color: #0088cc;">{{ chats.len() }}</div>
+            </div>
+        </div>
+
         <div class="card">
             <h2>Global Settings</h2>
             <form action="/dashboard/update" method="POST">

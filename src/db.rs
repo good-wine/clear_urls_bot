@@ -31,14 +31,18 @@ impl Db {
                 user_id INTEGER PRIMARY KEY,
                 enabled BOOLEAN NOT NULL DEFAULT 1,
                 mode TEXT NOT NULL DEFAULT 'reply',
-                ignored_domains TEXT NOT NULL DEFAULT ''
+                ignored_domains TEXT NOT NULL DEFAULT '',
+                cleaned_count INTEGER NOT NULL DEFAULT 0
             )"
         )
         .execute(&self.pool)
         .await?;
 
-        // Add ignored_domains column if it doesn't exist (for migrations)
+        // Add columns if they don't exist (migrations)
         let _ = sqlx::query("ALTER TABLE user_configs ADD COLUMN ignored_domains TEXT NOT NULL DEFAULT ''")
+            .execute(&self.pool)
+            .await;
+        let _ = sqlx::query("ALTER TABLE user_configs ADD COLUMN cleaned_count INTEGER NOT NULL DEFAULT 0")
             .execute(&self.pool)
             .await;
 
@@ -69,21 +73,35 @@ impl Db {
             enabled: true,
             mode: "reply".to_string(),
             ignored_domains: String::new(),
+            cleaned_count: 0,
         }))
     }
 
     pub async fn save_user_config(&self, config: &UserConfig) -> Result<()> {
         sqlx::query(
-            "INSERT INTO user_configs (user_id, enabled, mode, ignored_domains) VALUES (?, ?, ?, ?)
-             ON CONFLICT(user_id) DO UPDATE SET enabled = ?, mode = ?, ignored_domains = ?"
+            "INSERT INTO user_configs (user_id, enabled, mode, ignored_domains, cleaned_count) VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT(user_id) DO UPDATE SET enabled = ?, mode = ?, ignored_domains = ?, cleaned_count = ?"
         )
         .bind(config.user_id)
         .bind(config.enabled)
         .bind(&config.mode)
         .bind(&config.ignored_domains)
+        .bind(config.cleaned_count)
         .bind(config.enabled)
         .bind(&config.mode)
         .bind(&config.ignored_domains)
+        .bind(config.cleaned_count)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn increment_cleaned_count(&self, user_id: i64, amount: i64) -> Result<()> {
+        sqlx::query(
+            "UPDATE user_configs SET cleaned_count = cleaned_count + ? WHERE user_id = ?"
+        )
+        .bind(amount)
+        .bind(user_id)
         .execute(&self.pool)
         .await?;
         Ok(())

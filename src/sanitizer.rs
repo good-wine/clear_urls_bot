@@ -4,6 +4,7 @@ use serde::Deserialize;
 use url::Url;
 use anyhow::{Result, Context};
 use tracing::{info, debug};
+use std::sync::{Arc, RwLock};
 
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
@@ -29,6 +30,7 @@ struct ClearUrlsData {
     providers: HashMap<String, RawProvider>,
 }
 
+#[derive(Clone)]
 struct CompiledProvider {
     name: String,
     url_pattern: Regex,
@@ -42,14 +44,24 @@ struct CompiledProvider {
 
 #[derive(Clone)]
 pub struct RuleEngine {
-    providers: std::sync::Arc<Vec<CompiledProvider>>,
+    providers: Arc<RwLock<Vec<CompiledProvider>>>,
+    source_url: String,
 }
 
 impl RuleEngine {
     pub async fn new(source_url: &str) -> Result<Self> {
-        info!("Fetching rules from {}", source_url);
+        let engine = Self {
+            providers: Arc::new(RwLock::new(Vec::new())),
+            source_url: source_url.to_string(),
+        };
+        engine.refresh().await?;
+        Ok(engine)
+    }
+
+    pub async fn refresh(&self) -> Result<()> {
+        info!("Fetching rules from {}", self.source_url);
         let client = reqwest::Client::new();
-        let resp = client.get(source_url).send().await?.text().await?;
+        let resp = client.get(&self.source_url).send().await?.text().await?;
         
         let data: ClearUrlsData = serde_json::from_str(&resp).context("Failed to parse ClearURLs JSON")?;
         
@@ -81,11 +93,14 @@ impl RuleEngine {
             });
         }
 
-        info!("Loaded {} providers", compiled_providers.len());
-
-        Ok(Self {
-            providers: std::sync::Arc::new(compiled_providers),
-        })
+        let count = compiled_providers.len();
+        {
+            let mut w = self.providers.write().unwrap();
+            *w = compiled_providers;
+        }
+        
+        info!("Loaded {} providers", count);
+        Ok(())
     }
 
     pub fn sanitize(&self, text: &str) -> Option<String> {
@@ -106,90 +121,93 @@ impl RuleEngine {
             let url_str = url.to_string();
             let mut current_iteration_changed = false;
 
-            for provider in self.providers.iter() {
-                if provider.url_pattern.is_match(&url_str) {
-                    debug!("Matched provider: {}", provider.name);
+            {
+                let providers = self.providers.read().unwrap();
+                for provider in providers.iter() {
+                    if provider.url_pattern.is_match(&url_str) {
+                        debug!("Matched provider: {}", provider.name);
 
-                    for exception in &provider.exceptions {
-                        if exception.is_match(&url_str) {
-                            return changed;
-                        }
-                    }
-
-                    // Handle redirections
-                    for redirection_regex in &provider.redirections {
-                         if let Some(caps) = redirection_regex.captures(&url_str) {
-                             if let Some(m) = caps.get(1) {
-                                 if let Ok(new_url) = Url::parse(m.as_str()) {
-                                     *url = new_url;
-                                     current_iteration_changed = true;
-                                     changed = true;
-                                     break;
-                                 }
-                             }
-                         }
-                    }
-                    
-                    if current_iteration_changed { break; }
-
-                    let query_pairs: Vec<(String, String)> = url.query_pairs().into_owned().collect();
-                    let mut new_query = url::form_urlencoded::Serializer::new(String::new());
-                    let mut has_params = false;
-                    let mut params_removed = false;
-
-                    for (key, value) in query_pairs {
-                        let mut keep = true;
-                        for rule in &provider.rules {
-                            if rule.is_match(&key) {
-                                keep = false;
-                                break;
+                        for exception in &provider.exceptions {
+                            if exception.is_match(&url_str) {
+                                return changed;
                             }
                         }
-                        if keep {
-                            for rule in &provider.referral_marketing {
-                                 if rule.is_match(&key) {
+
+                        // Handle redirections
+                        for redirection_regex in &provider.redirections {
+                            if let Some(caps) = redirection_regex.captures(&url_str) {
+                                if let Some(m) = caps.get(1) {
+                                    if let Ok(new_url) = Url::parse(m.as_str()) {
+                                        *url = new_url;
+                                        current_iteration_changed = true;
+                                        changed = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if current_iteration_changed { break; }
+
+                        let query_pairs: Vec<(String, String)> = url.query_pairs().into_owned().collect();
+                        let mut new_query = url::form_urlencoded::Serializer::new(String::new());
+                        let mut has_params = false;
+                        let mut params_removed = false;
+
+                        for (key, value) in query_pairs {
+                            let mut keep = true;
+                            for rule in &provider.rules {
+                                if rule.is_match(&key) {
                                     keep = false;
                                     break;
                                 }
                             }
+                            if keep {
+                                for rule in &provider.referral_marketing {
+                                    if rule.is_match(&key) {
+                                        keep = false;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if keep {
+                                new_query.append_pair(&key, &value);
+                                has_params = true;
+                            } else {
+                                params_removed = true;
+                            }
                         }
 
-                        if keep {
-                            new_query.append_pair(&key, &value);
-                            has_params = true;
-                        } else {
-                            params_removed = true;
+                        if params_removed {
+                            changed = true;
+                            current_iteration_changed = true;
+                            if has_params {
+                                url.set_query(Some(&new_query.finish()));
+                            } else {
+                                url.set_query(None);
+                            }
                         }
+                        
+                        let mut intermediate_url_str = url.to_string();
+                        for raw in &provider.raw_rules {
+                            let new_str = raw.replace_all(&intermediate_url_str, "");
+                            if new_str != intermediate_url_str {
+                                intermediate_url_str = new_str.to_string();
+                                changed = true;
+                                current_iteration_changed = true;
+                            }
+                        }
+                        
+                        if current_iteration_changed {
+                            if let Ok(new_url) = Url::parse(&intermediate_url_str) {
+                                *url = new_url;
+                            }
+                            break;
+                        }
+
+                        return changed;
                     }
-
-                    if params_removed {
-                        changed = true;
-                        current_iteration_changed = true;
-                        if has_params {
-                            url.set_query(Some(&new_query.finish()));
-                        } else {
-                            url.set_query(None);
-                        }
-                    }
-                    
-                     let mut intermediate_url_str = url.to_string();
-                     for raw in &provider.raw_rules {
-                         let new_str = raw.replace_all(&intermediate_url_str, "");
-                         if new_str != intermediate_url_str {
-                             intermediate_url_str = new_str.to_string();
-                             changed = true;
-                             current_iteration_changed = true;
-                         }
-                     }
-                     
-                     if current_iteration_changed {
-                         if let Ok(new_url) = Url::parse(&intermediate_url_str) {
-                             *url = new_url;
-                         }
-                         break;
-                     }
-
-                    return changed;
                 }
             }
 

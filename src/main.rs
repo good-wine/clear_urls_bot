@@ -28,12 +28,26 @@ async fn main() -> anyhow::Result<()> {
     let bot_task = bot::run_bot(bot, db.clone(), rules.clone(), config.clone());
     let web_task = web::run_server(config, db);
 
+    let rules_clone = rules.clone();
+    let refresh_task = tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(86400)); // 24 ore
+        loop {
+            interval.tick().await;
+            if let Err(e) = rules_clone.refresh().await {
+                tracing::error!("Failed to refresh rules: {}", e);
+            }
+        }
+    });
+
     tokio::select! {
         _ = bot_task => {
             tracing::error!("Bot task finished unexpectedly");
         }
         _ = web_task => {
             tracing::error!("Web server task finished unexpectedly");
+        }
+        _ = refresh_task => {
+            tracing::error!("Refresh task finished unexpectedly");
         }
     }
 

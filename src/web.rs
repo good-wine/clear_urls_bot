@@ -92,12 +92,7 @@ async fn index(
 ) -> Response {
     if let Some(user_cookie) = jar.get("user_session") {
         if let Ok(user) = serde_json::from_str::<TelegramUserSession>(user_cookie.value()) {
-            let user_config = state.db.get_user_config(user.id).await.unwrap_or(UserConfig {
-                user_id: user.id,
-                enabled: true,
-                mode: "reply".to_string(),
-                ignored_domains: String::new(),
-            });
+            let user_config = state.db.get_user_config(user.id).await.unwrap_or_default();
 
             let chats = state.db.get_chats_for_user(user.id).await.unwrap_or_default();
 
@@ -166,12 +161,14 @@ async fn update_config(
 ) -> impl IntoResponse {
     if let Some(user_cookie) = jar.get("user_session") {
         if let Ok(user) = serde_json::from_str::<TelegramUserSession>(user_cookie.value()) {
+            let user_config = state.db.get_user_config(user.id).await.unwrap_or_default();
             let enabled = form.enabled.is_some();
             let config = UserConfig {
                 user_id: user.id,
                 enabled,
                 mode: form.mode,
                 ignored_domains: form.ignored_domains,
+                cleaned_count: user_config.cleaned_count,
             };
             let _ = state.db.save_user_config(&config).await;
         }
