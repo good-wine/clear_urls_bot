@@ -1,88 +1,198 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ config.language }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ClearURLs Bot Dashboard</title>
+    <title>{{ tr.d_title }}</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: sans-serif; margin: 0; padding: 0; background-color: #f0f2f5; }
-        header { background: #0088cc; color: white; padding: 1rem; display: flex; justify-content: space-between; align-items: center; }
-        .container { max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
-        .card { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 1rem; }
-        h2 { margin-top: 0; }
-        .form-group { margin-bottom: 1rem; }
-        label { display: block; margin-bottom: 0.5rem; font-weight: bold; }
-        input[type="text"], select, textarea { width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; font-family: inherit; }
-        button { background: #0088cc; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; }
-        button:hover { background: #006699; }
-        .toggle { display: flex; align-items: center; gap: 0.5rem; }
-        .logout { color: white; text-decoration: none; }
-        .hint { font-size: 0.85rem; color: #666; margin-top: 0.25rem; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f4f7f9; color: #333; }
+        header { background: #0088cc; color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .container { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+        .card { background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 1.5rem; }
+        h2 { margin-top: 0; color: #0088cc; font-size: 1.25rem; border-bottom: 2px solid #f0f2f5; padding-bottom: 0.5rem; margin-bottom: 1rem; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-item { background: #e3f2fd; padding: 1.5rem; border-radius: 12px; text-align: center; border: 1px solid #bbdefb; }
+        .stat-value { font-size: 2.2rem; font-weight: bold; color: #0088cc; }
+        .stat-label { font-size: 0.85rem; color: #546e7a; text-transform: uppercase; letter-spacing: 0.5px; }
+        .form-group { margin-bottom: 1.2rem; }
+        label { display: block; margin-bottom: 0.4rem; font-weight: 600; font-size: 0.9rem; }
+        input[type="text"], select, textarea { width: 100%; padding: 0.7rem; border: 1px solid #dfe3e8; border-radius: 8px; box-sizing: border-box; font-family: inherit; font-size: 0.95rem; }
+        button { background: #0088cc; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; cursor: pointer; font-weight: 600; transition: background 0.2s; }
+        button:hover { background: #0077b5; }
+        .history-table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; font-size: 0.9rem; }
+        .history-table th { text-align: left; padding: 0.8rem; background: #f8f9fa; border-bottom: 2px solid #eee; }
+        .history-table td { padding: 0.8rem; border-bottom: 1px solid #eee; word-break: break-all; }
+        .chat-list { list-style: none; padding: 0; margin: 0; }
+        .chat-item { display: flex; flex-direction: column; padding: 1rem 0; border-bottom: 1px solid #eee; }
+        .chat-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+        .chat-controls { display: flex; gap: 0.5rem; align-items: center; }
+        .logout-btn { color: white; text-decoration: none; padding: 0.5rem 1rem; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; font-size: 0.9rem; }
+        .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: bold; }
+        .badge-green { background: #e8f5e9; color: #2e7d32; }
+        .badge-red { background: #ffebee; color: #c62828; }
     </style>
 </head>
 <body>
     <header>
-        <div>ClearURLs Bot</div>
-        <div>
-            <span>Welcome, {{ user.first_name }}</span>
-            <a href="/logout" class="logout" style="margin-left: 1rem;">Logout</a>
+        <div style="font-weight: bold; font-size: 1.4rem;">🛡️ ClearURLs Pro</div>
+        <div style="display: flex; align-items: center; gap: 1.5rem;">
+            {% if user.id == admin_id %}
+                <a href="/admin" style="color: #ff9800; text-decoration: none; font-weight: bold;">ADMIN</a>
+            {% endif %}
+            <span>{{ user.first_name }}</span>
+            <a href="/logout" class="logout-btn">Logout</a>
         </div>
     </header>
+
     <div class="container">
-        <div class="card stats-card" style="display: flex; justify-content: space-around; text-align: center; background: #e3f2fd; border: 1px solid #bbdefb;">
-            <div>
-                <div style="font-size: 0.9rem; color: #546e7a;">Links Cleaned</div>
-                <div style="font-size: 2rem; font-weight: bold; color: #0088cc;">{{ config.cleaned_count }}</div>
+        <div class="stats-grid">
+            <div class="stat-item">
+                <div class="stat-value">{{ config.cleaned_count }}</div>
+                <div class="stat-label">{{ tr.d_links_cleaned }}</div>
             </div>
-            <div>
-                <div style="font-size: 0.9rem; color: #546e7a;">Active in Chats</div>
-                <div style="font-size: 2rem; font-weight: bold; color: #0088cc;">{{ chats.len() }}</div>
+            <div class="stat-item">
+                <div class="stat-value">{{ chats.len() }}</div>
+                <div class="stat-label">{{ tr.d_active_chats }}</div>
+            </div>
+            <div class="stat-item">
+                <a href="/dashboard/export" style="text-decoration: none;">
+                    <div class="stat-value">📥</div>
+                    <div class="stat-label">Export CSV</div>
+                </a>
+            </div>
+            <div class="card" style="grid-column: span 1; margin-bottom: 0; padding: 1rem;">
+                <canvas id="statsChart" height="80"></canvas>
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+            <div class="card">
+                <h2>{{ tr.d_global_settings }}</h2>
+                <form action="/dashboard/update" method="POST">
+                    <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem;">
+                        <input type="checkbox" id="enabled" name="enabled" {% if config.enabled %}checked{% endif %}>
+                        <label for="enabled" style="margin:0;">{{ tr.d_enable_bot }}</label>
+                    </div>
+                    <div class="form-group">
+                        <label>{{ tr.d_action_mode }}</label>
+                        <select name="mode">
+                            <option value="reply" {% if config.mode == "reply" %}selected{% endif %}>{{ tr.d_mode_reply }}</option>
+                            <option value="delete" {% if config.mode == "delete" %}selected{% endif %}>{{ tr.d_mode_delete }}</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Language / Lingua</label>
+                        <select name="language">
+                            <option value="en" {% if config.language == "en" %}selected{% endif %}>English</option>
+                            <option value="it" {% if config.language == "it" %}selected{% endif %}>Italiano</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="ignored_domains">{{ tr.d_ignored_domains }}</label>
+                        <textarea id="ignored_domains" name="ignored_domains" rows="2">{{ config.ignored_domains }}</textarea>
+                    </div>
+                    <button type="submit">{{ tr.d_save }}</button>
+                </form>
+
+                <h2 style="margin-top: 2rem;">Custom Parameters (Auto-Remove)</h2>
+                <form action="/dashboard/custom_rule/add" method="POST" style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+                    <input type="text" name="pattern" placeholder="e.g. fbclid, utm_source" required>
+                    <button type="submit">Add</button>
+                </form>
+                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                    {% for rule in custom_rules %}
+                        <div class="badge badge-green" style="display: flex; align-items: center; gap: 0.5rem;">
+                            {{ rule.pattern }}
+                            <form action="/dashboard/custom_rule/delete/{{ rule.id }}" method="POST" style="display: inline;">
+                                <button type="submit" style="background:none; color: #c62828; padding:0; font-size: 1rem; line-height: 1;">×</button>
+                            </form>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>{{ tr.d_managed_chats }}</h2>
+                {% if chats.is_empty() %}
+                    <p style="color: #666;">{{ tr.d_no_chats }}</p>
+                {% else %}
+                    <ul class="chat-list">
+                    {% for chat in chats %}
+                        <li class="chat-item">
+                            <div class="chat-header">
+                                <span style="font-weight: 500;">
+                                {% if let Some(title) = chat.title %}
+                                    {{ title }}
+                                {% else %}
+                                    Chat
+                                {% endif %}
+                            </span>
+                                <form action="/dashboard/chat/toggle/{{ chat.chat_id }}" method="POST">
+                                    <button type="submit" style="background: {% if chat.enabled %}#4caf50{% else %}#f44336{% endif %}; padding: 0.2rem 0.5rem; font-size: 0.75rem;">
+                                        {% if chat.enabled %}ACTIVE{% else %}PAUSED{% endif %}
+                                    </button>
+                                </form>
+                            </div>
+                            <form action="/dashboard/chat/mode/{{ chat.chat_id }}" method="POST" style="display: flex; gap: 0.5rem;">
+                                <select name="mode" style="padding: 0.3rem; font-size: 0.85rem;" onchange="this.form.submit()">
+                                    <option value="default" {% if chat.mode == "default" %}selected{% endif %}>Use Global Mode</option>
+                                    <option value="reply" {% if chat.mode == "reply" %}selected{% endif %}>Always Reply</option>
+                                    <option value="delete" {% if chat.mode == "delete" %}selected{% endif %}>Always Delete</option>
+                                </select>
+                            </form>
+                        </li>
+                    {% endfor %}
+                    </ul>
+                {% endif %}
             </div>
         </div>
 
         <div class="card">
-            <h2>Global Settings</h2>
-            <form action="/dashboard/update" method="POST">
-                <div class="form-group toggle">
-                    <input type="checkbox" id="enabled" name="enabled" {% if config.enabled %}checked{% endif %}>
-                    <label for="enabled" style="margin:0;">Enable Bot for your messages</label>
-                </div>
-                <div class="form-group">
-                    <label>Action Mode</label>
-                    <select name="mode">
-                        <option value="reply" {% if config.mode == "reply" %}selected{% endif %}>Reply with Clean Link</option>
-                        <option value="delete" {% if config.mode == "delete" %}selected{% endif %}>Delete & Repost (Requires Admin)</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="ignored_domains">Ignored Domains (Whitelist)</label>
-                    <textarea id="ignored_domains" name="ignored_domains" rows="3" placeholder="e.g. internal.company.com, myprivate.site">{{ config.ignored_domains }}</textarea>
-                    <div class="hint">Comma-separated list of domains that the bot should ignore.</div>
-                </div>
-                <button type="submit">Save Settings</button>
-            </form>
-        </div>
-
-        <div class="card">
-            <h2>Your Managed Chats</h2>
-            <p>Chats where you added the bot:</p>
-            {% if chats.is_empty() %}
-                <p>No chats found.</p>
-            {% else %}
-                <ul>
-                {% for chat in chats %}
-                    <li>
-                        {% if let Some(title) = chat.title %}
-                            {{ title }}
-                        {% else %}
-                            Chat ID: {{ chat.chat_id }}
-                        {% endif %}
-                        {% if !chat.enabled %}(Disabled){% endif %}
-                    </li>
-                {% endfor %}
-                </ul>
-            {% endif %}
+            <h2>{{ tr.d_history }}</h2>
+            <table class="history-table">
+                <thead>
+                    <tr>
+                        <th style="width: 35%;">Original</th>
+                        <th style="width: 35%;">Cleaned</th>
+                        <th style="width: 30%;">Provider</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for link in history %}
+                    <tr>
+                        <td style="color: #f44336; font-size: 0.75rem;">{{ link.original_url }}</td>
+                        <td style="color: #4caf50; font-weight: 500;">{{ link.cleaned_url }}</td>
+                        <td><span class="badge badge-green">{{ link.provider_name.clone().unwrap_or_default() }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
+
+    <script>
+        const ctx = document.getElementById('statsChart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [{% for stat in stats_by_day %}'{{ stat.0 }}',{% endfor %}],
+                datasets: [{
+                    label: 'Cleaned Links',
+                    data: [{% for stat in stats_by_day %}{{ stat.1 }},{% endfor %}],
+                    borderColor: '#0088cc',
+                    backgroundColor: 'rgba(0, 136, 204, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+            }
+        });
+    </script>
 </body>
 </html>

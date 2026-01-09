@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ClearURLs Admin Console</title>
+    <style>
+        body { font-family: sans-serif; background: #1a1a1a; color: white; margin: 0; padding: 2rem; }
+        .card { background: #2a2a2a; padding: 2rem; border-radius: 12px; max-width: 600px; margin: auto; }
+        .stat { font-size: 3rem; font-weight: bold; color: #0088cc; }
+        .label { color: #888; text-transform: uppercase; margin-bottom: 1.5rem; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Global Admin Console</h1>
+        <div class="stat">{{ total_cleaned }}</div>
+        <div class="label">Total Links Cleaned Worldwide</div>
+        <div class="stat">{{ total_users }}</div>
+        <div class="label">Total Registered Users</div>
+        <a href="/" style="color: #0088cc;">Back to Dashboard</a>
+    </div>
+</body>
+</html>

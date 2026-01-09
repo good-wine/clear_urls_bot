@@ -103,10 +103,21 @@ impl RuleEngine {
         Ok(())
     }
 
-    pub fn sanitize(&self, text: &str) -> Option<String> {
+    pub fn sanitize(&self, text: &str) -> Option<(String, String)> {
         if let Ok(mut url) = Url::parse(text) {
+             let mut provider_name = String::from("Custom/Other");
+             
+             // First check global providers
+             let providers = self.providers.read().unwrap();
+             for p in providers.iter() {
+                 if p.url_pattern.is_match(text) {
+                     provider_name = p.name.clone();
+                     break;
+                 }
+             }
+
              if self.clean_url_in_place(&mut url) {
-                 return Some(url.to_string());
+                 return Some((url.to_string(), provider_name));
              }
         }
         None

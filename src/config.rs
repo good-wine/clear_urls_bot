@@ -8,6 +8,7 @@ pub struct Config {
     pub database_url: String,
     pub server_addr: String,
     pub dashboard_url: String,
+    pub admin_id: i64,
     pub clearurls_source: String,
 }
 
@@ -20,6 +21,7 @@ impl Config {
         let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:bot.db".to_string());
         let server_addr = env::var("SERVER_ADDR").unwrap_or_else(|_| "127.0.0.1:3000".to_string());
         let dashboard_url = env::var("DASHBOARD_URL").unwrap_or_else(|_| "http://127.0.0.1:3000".to_string());
+        let admin_id = env::var("ADMIN_ID").unwrap_or_else(|_| "0".to_string()).parse().unwrap_or(0);
         let clearurls_source = env::var("CLEARURLS_SOURCE").unwrap_or_else(|_| "https://raw.githubusercontent.com/ClearURLs/Rules/refs/heads/master/data.min.json".to_string());
 
         Self {
@@ -28,6 +30,7 @@ impl Config {
             database_url,
             server_addr,
             dashboard_url,
+            admin_id,
             clearurls_source,
         }
     }

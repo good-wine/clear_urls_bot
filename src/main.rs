@@ -4,6 +4,7 @@ mod db;
 mod sanitizer;
 mod bot;
 mod web;
+mod i18n;
 
 use teloxide::prelude::*;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};

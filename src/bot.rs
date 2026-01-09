@@ -1,5 +1,5 @@
 use teloxide::{prelude::*, types::{MessageEntityKind, ParseMode}, utils::html};
-use crate::{sanitizer::RuleEngine, db::Db, models::ChatConfig};
+use crate::{sanitizer::RuleEngine, db::Db, models::ChatConfig, i18n};
 use url::Url;
 
 pub async fn run_bot(bot: Bot, db: Db, rules: RuleEngine, config: crate::config::Config) {
@@ -23,6 +23,8 @@ async fn handle_message(
 ) -> ResponseResult<()> {
     let chat_id = msg.chat.id;
     let user_id = msg.from().map(|u| u.id.0 as i64).unwrap_or(0);
+    let user_config = db.get_user_config(user_id).await.unwrap_or_default();
+    let tr = i18n::get_translations(&user_config.language);
 
     // Handle /start command in private chat
     if let Some(text) = msg.text() {
@@ -31,36 +33,24 @@ async fn handle_message(
                 "/start" => {
                     let keyboard = teloxide::types::InlineKeyboardMarkup::new(vec![vec![
                         teloxide::types::InlineKeyboardButton::url(
-                            "🚀 Apri Dashboard",
+                            tr.open_dashboard,
                             config.dashboard_url.parse().unwrap(),
                         )
                     ]]);
 
-                    bot.send_message(chat_id, "<b>Benvenuto nel gestore ClearURLs!</b>\n\nPuoi configurare il bot e gestire i tuoi link puliti direttamente dal dashboard web protetto.")
+                    let welcome_text = tr.welcome.replace("{}", &user_id.to_string());
+                    bot.send_message(chat_id, welcome_text)
                         .parse_mode(ParseMode::Html)
                         .reply_markup(keyboard)
                         .await?;
                     return Ok(());
                 }
                 "/help" => {
-                    let help_text = "<b>Guida ClearURLs Bot</b> 🛡️\n\n\
-                        Questo bot rimuove automaticamente i parametri di tracciamento dai link che invii.\n\n\
-                        <b>Comandi:</b>\n\
-                        /start - Inizia e ricevi il link al dashboard\n\
-                        /help - Mostra questo messaggio\n\
-                        /stats - Visualizza le tue statistiche di pulizia\n\n\
-                        Puoi usarmi in chat privata o aggiungermi ai gruppi!";
-                    bot.send_message(chat_id, help_text).parse_mode(ParseMode::Html).await?;
+                    bot.send_message(chat_id, tr.help_text).parse_mode(ParseMode::Html).await?;
                     return Ok(());
                 }
                 "/stats" => {
-                    let user_config = db.get_user_config(user_id).await.unwrap_or_default();
-                    let stats_text = format!(
-                        "<b>Le tue statistiche</b> 📊\n\n\
-                        Link puliti finora: <b>{}</b>\n\n\
-                        Grazie per proteggere la tua privacy!",
-                        user_config.cleaned_count
-                    );
+                    let stats_text = tr.stats_text.replace("{}", &user_config.cleaned_count.to_string());
                     bot.send_message(chat_id, stats_text).parse_mode(ParseMode::Html).await?;
                     return Ok(());
                 }
@@ -68,22 +58,36 @@ async fn handle_message(
             }
         }
     }
+
     // Persist/Update chat info
     if msg.chat.is_group() || msg.chat.is_supergroup() || msg.chat.is_channel() {
         let title = msg.chat.title().map(|s| s.to_string());
+        let chat_exists = db.get_chat_config(chat_id.0).await.is_ok();
+        
         let _ = db.save_chat_config(&ChatConfig {
             chat_id: chat_id.0,
-            title,
+            title: title.clone(),
             enabled: true,
             added_by: user_id,
+            mode: "default".to_string(),
         }).await;
+
+        // If it's a new chat, notify the user privately
+        if !chat_exists && user_id != 0 {
+            let notify_text = format!(
+                "🛡️ <b>ClearURLs attivato!</b>\n\nHo iniziato a proteggere il gruppo: <b>{}</b>\n\nPuoi disattivarlo o cambiare modalità dal tuo dashboard.",
+                html::escape(&title.unwrap_or_else(|| "Sconosciuto".to_string()))
+            );
+            let _ = bot.send_message(ChatId(user_id), notify_text)
+                .parse_mode(ParseMode::Html)
+                .await;
+        }
     }
 
     let chat_config = db.get_chat_config(chat_id.0).await.ok();
-    let user_config = db.get_user_config(user_id).await.ok();
 
-    let chat_enabled = chat_config.map(|c| c.enabled).unwrap_or(true);
-    let user_enabled = user_config.as_ref().map(|c| c.enabled).unwrap_or(true);
+    let chat_enabled = chat_config.as_ref().map(|c| c.enabled).unwrap_or(true);
+    let user_enabled = user_config.enabled;
 
     if !chat_enabled || !user_enabled {
         return Ok(())
@@ -102,15 +106,18 @@ async fn handle_message(
         None => return Ok(()),
     };
 
-    let ignored_domains: Vec<String> = user_config.as_ref()
-        .map(|c| c.ignored_domains.split(',').map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty()).collect())
-        .unwrap_or_default();
+    let ignored_domains: Vec<String> = user_config.ignored_domains.split(',')
+        .map(|s| s.trim().to_lowercase())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    let custom_rules = db.get_custom_rules(user_id).await.unwrap_or_default();
 
     let mut cleaned_urls = Vec::new();
     let utf16: Vec<u16> = text.encode_utf16().collect();
 
     for entity in entities {
-        let url_str = match &entity.kind {
+        let mut url_str = match &entity.kind {
             MessageEntityKind::Url => {
                 let start = entity.offset;
                 let end = start + entity.length;
@@ -123,7 +130,35 @@ async fn handle_message(
             _ => continue,
         };
 
-        // Domain check
+        let original_url_str = url_str.clone();
+
+        // 1. Custom User Rules
+        if let Ok(mut parsed) = Url::parse(&url_str) {
+            let mut custom_changed = false;
+            let query_pairs: Vec<(String, String)> = parsed.query_pairs().into_owned().collect();
+            let mut new_query = url::form_urlencoded::Serializer::new(String::new());
+            
+            for (key, value) in query_pairs {
+                let mut keep = true;
+                for crule in &custom_rules {
+                    if key.contains(&crule.pattern) {
+                        keep = false;
+                        custom_changed = true;
+                        break;
+                    }
+                }
+                if keep {
+                    new_query.append_pair(&key, &value);
+                }
+            }
+
+            if custom_changed {
+                parsed.set_query(Some(&new_query.finish()));
+                url_str = parsed.to_string();
+            }
+        }
+
+        // 2. Global ClearURLs rules
         if let Ok(parsed) = Url::parse(&url_str) {
             if let Some(host) = parsed.host_str() {
                 if ignored_domains.iter().any(|d| host.contains(d)) {
@@ -132,10 +167,14 @@ async fn handle_message(
             }
         }
 
-        if let Some(cleaned) = rules.sanitize(&url_str) {
-             if cleaned != url_str {
-                 cleaned_urls.push((url_str, cleaned));
-             }
+        let mut provider_name = String::from("Custom");
+        if let Some((cleaned, provider)) = rules.sanitize(&url_str) {
+             url_str = cleaned;
+             provider_name = provider;
+        }
+
+        if url_str != original_url_str {
+            cleaned_urls.push((original_url_str, url_str, provider_name));
         }
     }
 
@@ -145,14 +184,20 @@ async fn handle_message(
 
     // Increment stats
     let _ = db.increment_cleaned_count(user_id, cleaned_urls.len() as i64).await;
+    for (orig, clean, prov) in &cleaned_urls {
+        let _ = db.log_cleaned_link(user_id, orig, clean, prov).await;
+    }
 
-    let mode = user_config.map(|c| c.mode).unwrap_or("reply".to_string());
+    let mode = match chat_config.as_ref().map(|c| c.mode.clone()).unwrap_or("default".into()).as_str() {
+        "default" | "" => user_config.mode.clone(),
+        m => m.to_string(),
+    };
 
     if mode == "delete" {
          if bot.delete_message(chat_id, msg.id).await.is_ok() {
              let user_name = msg.from().map(|u| u.first_name.clone()).unwrap_or("User".into());
-             let mut response = format!("<b>Link(s) cleaned for {}:</b>\n", html::escape(&user_name));
-             for (_, cleaned) in cleaned_urls {
+             let mut response = tr.cleaned_for.replace("{}", &html::escape(&user_name));
+             for (_, cleaned, _) in &cleaned_urls {
                  response.push_str(&format!("• <a href=\"{}\">{}</a>\n", html::escape(&cleaned), html::escape(&cleaned)));
              }
              bot.send_message(chat_id, response).parse_mode(ParseMode::Html).await?;
@@ -160,8 +205,8 @@ async fn handle_message(
          }
     }
 
-    let mut response = String::from("<b>Cleaned Link(s):</b>\n");
-    for (_, cleaned) in cleaned_urls {
+    let mut response = String::from(tr.cleaned_links);
+    for (_, cleaned, _) in &cleaned_urls {
          response.push_str(&format!("• {}\n", html::escape(&cleaned)));
     }
     
