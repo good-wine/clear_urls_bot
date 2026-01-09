@@ -33,12 +33,12 @@ async fn main() -> anyhow::Result<()> {
     let bot_task = bot::run_bot(bot, db.clone(), rules.clone(), config.clone(), event_tx.clone());
     let web_task = web::run_server(config, db, event_tx);
 
-    let rules_clone = rules.clone();
+    let rules_refresh = rules.clone();
     let refresh_task = tokio::spawn(async move {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(86400)); // 24 ore
         loop {
             interval.tick().await;
-            if let Err(e) = rules_clone.refresh().await {
+            if let Err(e) = rules_refresh.refresh().await {
                 tracing::error!("Failed to refresh rules: {}", e);
             }
         }

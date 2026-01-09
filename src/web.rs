@@ -65,14 +65,18 @@ struct CustomRuleForm {
     pattern: String,
 }
 
-pub async fn run_server(config: Config, db: Db, event_tx: tokio::sync::broadcast::Sender<serde_json::Value>) {
+pub async fn run_server(
+    config: Config, 
+    db: Db, 
+    event_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
+) {
     let key = Key::generate();
     
     let state = AppState {
-        db,
+        db: db.clone(),
         config: config.clone(),
         key,
-        event_tx,
+        event_tx: event_tx.clone(),
     };
 
     let app = Router::new()
