@@ -284,18 +284,27 @@ async fn handle_message(
     }
 
     if cleaned_urls.len() == 1 {
-        response.push_str(&html::escape(&cleaned_urls[0].1));
+        let clean = &cleaned_urls[0].1;
+        response.push_str(&format!("<a href=\"{}\">{}</a>", html::escape(clean), html::escape(clean)));
     } else {
         for (_, cleaned, _) in &cleaned_urls {
-            response.push_str(&format!("• {}\n", html::escape(cleaned)));
+            response.push_str(&format!("• <a href=\"{}\">{}</a>\n", html::escape(cleaned), html::escape(cleaned)));
         }
     }
     
     tracing::info!(chat_id = %chat_id, "Sending cleaned URLs reply");
     
+    use teloxide::types::LinkPreviewOptions;
     let mut request = bot.send_message(chat_id, response)
         .reply_parameters(ReplyParameters::new(msg.id))
-        .parse_mode(ParseMode::Html);
+        .parse_mode(ParseMode::Html)
+        .link_preview_options(LinkPreviewOptions {
+            is_disabled: true, // Keep groups clean by default
+            url: None,
+            prefer_small_media: false,
+            prefer_large_media: false,
+            show_above_text: false,
+        });
 
     // Support for Supergroup topics/threads
     if let Some(thread_id) = msg.thread_id {
