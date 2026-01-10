@@ -50,7 +50,6 @@ pub struct TelegramUserSession {
 #[template(path = "login.html")]
 struct LoginTemplate {
     bot_username: String,
-    dashboard_url: String,
 }
 
 #[derive(Template)]
@@ -275,7 +274,6 @@ async fn login_page(
 
     let template = LoginTemplate {
         bot_username: state.config.bot_username.clone(),
-        dashboard_url: state.config.dashboard_url.to_string().trim_end_matches('/').to_string(),
     };
     match template.render() {
         Ok(html) => Html(html).into_response(),
