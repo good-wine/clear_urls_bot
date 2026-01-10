@@ -1,8 +1,8 @@
+use crate::config::Config;
+use anyhow::{anyhow, Result};
 use reqwest::Client;
 use serde_json::{json, Value};
-use anyhow::{Result, anyhow};
 use tracing::debug;
-use crate::config::Config;
 
 #[derive(Clone)]
 pub struct AiEngine {

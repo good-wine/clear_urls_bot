@@ -1,6 +1,6 @@
-use sqlx::{any::AnyPoolOptions, Pool, Any};
+use crate::models::{ChatConfig, UserConfig};
 use anyhow::Result;
-use crate::models::{UserConfig, ChatConfig};
+use sqlx::{any::AnyPoolOptions, Any, Pool};
 
 #[derive(Clone)]
 pub struct Db {
@@ -10,7 +10,7 @@ pub struct Db {
 impl Db {
     pub async fn new(database_url: &str) -> Result<Self> {
         sqlx::any::install_default_drivers();
-        
+
         let pool = AnyPoolOptions::new()
             .max_connections(5)
             .connect(database_url)
@@ -50,22 +50,43 @@ impl Db {
 
         // Robust migrations: check if columns exist before adding
         if is_sqlite {
-            let table_info: Vec<(i64, String, String, i32, Option<String>, i32)> = 
-                sqlx::query_as("PRAGMA table_info(user_configs)").fetch_all(&self.pool).await?;
-            
-            let cols: Vec<String> = table_info.into_iter().map(|(_, name, _, _, _, _)| name).collect();
-            
+            let table_info: Vec<(i64, String, String, i32, Option<String>, i32)> =
+                sqlx::query_as("PRAGMA table_info(user_configs)")
+                    .fetch_all(&self.pool)
+                    .await?;
+
+            let cols: Vec<String> = table_info
+                .into_iter()
+                .map(|(_, name, _, _, _, _)| name)
+                .collect();
+
             if !cols.contains(&"ai_enabled".to_string()) {
-                sqlx::query("ALTER TABLE user_configs ADD COLUMN ai_enabled INTEGER NOT NULL DEFAULT 0").execute(&self.pool).await?;
+                sqlx::query(
+                    "ALTER TABLE user_configs ADD COLUMN ai_enabled INTEGER NOT NULL DEFAULT 0",
+                )
+                .execute(&self.pool)
+                .await?;
             }
             if !cols.contains(&"ignored_domains".to_string()) {
-                sqlx::query("ALTER TABLE user_configs ADD COLUMN ignored_domains TEXT NOT NULL DEFAULT ''").execute(&self.pool).await?;
+                sqlx::query(
+                    "ALTER TABLE user_configs ADD COLUMN ignored_domains TEXT NOT NULL DEFAULT ''",
+                )
+                .execute(&self.pool)
+                .await?;
             }
             if !cols.contains(&"cleaned_count".to_string()) {
-                sqlx::query("ALTER TABLE user_configs ADD COLUMN cleaned_count INTEGER NOT NULL DEFAULT 0").execute(&self.pool).await?;
+                sqlx::query(
+                    "ALTER TABLE user_configs ADD COLUMN cleaned_count INTEGER NOT NULL DEFAULT 0",
+                )
+                .execute(&self.pool)
+                .await?;
             }
             if !cols.contains(&"language".to_string()) {
-                sqlx::query("ALTER TABLE user_configs ADD COLUMN language TEXT NOT NULL DEFAULT 'en'").execute(&self.pool).await?;
+                sqlx::query(
+                    "ALTER TABLE user_configs ADD COLUMN language TEXT NOT NULL DEFAULT 'en'",
+                )
+                .execute(&self.pool)
+                .await?;
             }
         } else {
             // Postgres migration logic
@@ -93,13 +114,22 @@ impl Db {
             )"
         };
         sqlx::query(create_chat_configs).execute(&self.pool).await?;
-        
+
         if is_sqlite {
-            let table_info: Vec<(i64, String, String, i32, Option<String>, i32)> = 
-                sqlx::query_as("PRAGMA table_info(chat_configs)").fetch_all(&self.pool).await?;
-            let cols: Vec<String> = table_info.into_iter().map(|(_, name, _, _, _, _)| name).collect();
+            let table_info: Vec<(i64, String, String, i32, Option<String>, i32)> =
+                sqlx::query_as("PRAGMA table_info(chat_configs)")
+                    .fetch_all(&self.pool)
+                    .await?;
+            let cols: Vec<String> = table_info
+                .into_iter()
+                .map(|(_, name, _, _, _, _)| name)
+                .collect();
             if !cols.contains(&"mode".to_string()) {
-                sqlx::query("ALTER TABLE chat_configs ADD COLUMN mode TEXT NOT NULL DEFAULT 'default'").execute(&self.pool).await?;
+                sqlx::query(
+                    "ALTER TABLE chat_configs ADD COLUMN mode TEXT NOT NULL DEFAULT 'default'",
+                )
+                .execute(&self.pool)
+                .await?;
             }
         } else {
             sqlx::query("ALTER TABLE chat_configs ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'default'").execute(&self.pool).await?;
@@ -141,20 +171,35 @@ impl Db {
         };
         sqlx::query(create_history).execute(&self.pool).await?;
         if is_sqlite {
-            let table_info: Vec<(i64, String, String, i32, Option<String>, i32)> = 
-                sqlx::query_as("PRAGMA table_info(cleaned_links)").fetch_all(&self.pool).await?;
-            let cols: Vec<String> = table_info.into_iter().map(|(_, name, _, _, _, _)| name).collect();
+            let table_info: Vec<(i64, String, String, i32, Option<String>, i32)> =
+                sqlx::query_as("PRAGMA table_info(cleaned_links)")
+                    .fetch_all(&self.pool)
+                    .await?;
+            let cols: Vec<String> = table_info
+                .into_iter()
+                .map(|(_, name, _, _, _, _)| name)
+                .collect();
             if !cols.contains(&"provider_name".to_string()) {
-                sqlx::query("ALTER TABLE cleaned_links ADD COLUMN provider_name TEXT").execute(&self.pool).await?;
+                sqlx::query("ALTER TABLE cleaned_links ADD COLUMN provider_name TEXT")
+                    .execute(&self.pool)
+                    .await?;
             }
         } else {
-            sqlx::query("ALTER TABLE cleaned_links ADD COLUMN IF NOT EXISTS provider_name TEXT").execute(&self.pool).await?;
+            sqlx::query("ALTER TABLE cleaned_links ADD COLUMN IF NOT EXISTS provider_name TEXT")
+                .execute(&self.pool)
+                .await?;
         }
 
         Ok(())
     }
 
-    pub async fn log_cleaned_link(&self, user_id: i64, original: &str, cleaned: &str, provider: &str) -> Result<()> {
+    pub async fn log_cleaned_link(
+        &self,
+        user_id: i64,
+        original: &str,
+        cleaned: &str,
+        provider: &str,
+    ) -> Result<()> {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)?
             .as_secs() as i64;
@@ -172,9 +217,13 @@ impl Db {
         Ok(())
     }
 
-    pub async fn get_history(&self, user_id: i64, limit: i64) -> Result<Vec<crate::models::CleanedLink>> {
+    pub async fn get_history(
+        &self,
+        user_id: i64,
+        limit: i64,
+    ) -> Result<Vec<crate::models::CleanedLink>> {
         let history = sqlx::query_as::<_, crate::models::CleanedLink>(
-            "SELECT * FROM cleaned_links WHERE user_id = ? ORDER BY timestamp DESC LIMIT ?"
+            "SELECT * FROM cleaned_links WHERE user_id = ? ORDER BY timestamp DESC LIMIT ?",
         )
         .bind(user_id)
         .bind(limit)
@@ -184,9 +233,10 @@ impl Db {
     }
 
     pub async fn get_global_stats(&self) -> Result<(i64, i64)> {
-        let total_cleaned: (Option<i64>,) = sqlx::query_as("SELECT SUM(cleaned_count) FROM user_configs")
-            .fetch_one(&self.pool)
-            .await?;
+        let total_cleaned: (Option<i64>,) =
+            sqlx::query_as("SELECT SUM(cleaned_count) FROM user_configs")
+                .fetch_one(&self.pool)
+                .await?;
         let total_users: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM user_configs")
             .fetch_one(&self.pool)
             .await?;
@@ -194,12 +244,11 @@ impl Db {
     }
 
     pub async fn get_user_config(&self, user_id: i64) -> Result<UserConfig> {
-        let config = sqlx::query_as::<_, UserConfig>(
-            "SELECT * FROM user_configs WHERE user_id = ?"
-        )
-        .bind(user_id)
-        .fetch_optional(&self.pool)
-        .await?;
+        let config =
+            sqlx::query_as::<_, UserConfig>("SELECT * FROM user_configs WHERE user_id = ?")
+                .bind(user_id)
+                .fetch_optional(&self.pool)
+                .await?;
 
         Ok(config.unwrap_or(UserConfig {
             user_id,
@@ -236,19 +285,17 @@ impl Db {
     }
 
     pub async fn increment_cleaned_count(&self, user_id: i64, amount: i64) -> Result<()> {
-        sqlx::query(
-            "UPDATE user_configs SET cleaned_count = cleaned_count + ? WHERE user_id = ?"
-        )
-        .bind(amount)
-        .bind(user_id)
-        .execute(&self.pool)
-        .await?;
+        sqlx::query("UPDATE user_configs SET cleaned_count = cleaned_count + ? WHERE user_id = ?")
+            .bind(amount)
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
     pub async fn get_custom_rules(&self, user_id: i64) -> Result<Vec<crate::models::CustomRule>> {
         let rules = sqlx::query_as::<_, crate::models::CustomRule>(
-            "SELECT * FROM custom_rules WHERE user_id = ?"
+            "SELECT * FROM custom_rules WHERE user_id = ?",
         )
         .bind(user_id)
         .fetch_all(&self.pool)
@@ -295,12 +342,11 @@ impl Db {
     }
 
     pub async fn get_chat_config(&self, chat_id: i64) -> Result<Option<ChatConfig>> {
-        let config = sqlx::query_as::<_, ChatConfig>(
-            "SELECT * FROM chat_configs WHERE chat_id = ?"
-        )
-        .bind(chat_id)
-        .fetch_optional(&self.pool)
-        .await?;
+        let config =
+            sqlx::query_as::<_, ChatConfig>("SELECT * FROM chat_configs WHERE chat_id = ?")
+                .bind(chat_id)
+                .fetch_optional(&self.pool)
+                .await?;
 
         Ok(config)
     }
@@ -336,12 +382,11 @@ impl Db {
     }
 
     pub async fn get_chats_for_user(&self, user_id: i64) -> Result<Vec<ChatConfig>> {
-        let chats = sqlx::query_as::<_, ChatConfig>(
-            "SELECT * FROM chat_configs WHERE added_by = ?"
-        )
-        .bind(user_id)
-        .fetch_all(&self.pool)
-        .await?;
+        let chats =
+            sqlx::query_as::<_, ChatConfig>("SELECT * FROM chat_configs WHERE added_by = ?")
+                .bind(user_id)
+                .fetch_all(&self.pool)
+                .await?;
         Ok(chats)
     }
 }

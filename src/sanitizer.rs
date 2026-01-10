@@ -1,19 +1,31 @@
-use std::collections::HashMap;
+use anyhow::{Context, Result};
 use regex::Regex;
 use serde::Deserialize;
-use url::Url;
-use anyhow::{Result, Context};
+use std::collections::HashMap;
+use std::sync::{Arc, LazyLock, RwLock};
 use tracing::info;
-use std::sync::{Arc, RwLock, LazyLock};
+use url::Url;
 
 static SENSITIVE_PATTERNS: LazyLock<HashMap<&'static str, Regex>> = LazyLock::new(|| {
     let mut m = HashMap::new();
     // Use \b (word boundary) instead of look-arounds
-    m.insert("aws_access_key", Regex::new(r"(?i)\b[A-Z0-9]{20}\b").unwrap());
-    m.insert("aws_secret_key", Regex::new(r"(?i)\b[A-Za-z0-9/+=]{40}\b").unwrap());
-    m.insert("password", Regex::new(r"(?i)password\s*[:=]\s*[^\s]+").unwrap());
+    m.insert(
+        "aws_access_key",
+        Regex::new(r"(?i)\b[A-Z0-9]{20}\b").unwrap(),
+    );
+    m.insert(
+        "aws_secret_key",
+        Regex::new(r"(?i)\b[A-Za-z0-9/+=]{40}\b").unwrap(),
+    );
+    m.insert(
+        "password",
+        Regex::new(r"(?i)password\s*[:=]\s*[^\s]+").unwrap(),
+    );
     m.insert("ipv4", Regex::new(r"(?:\d{1,3}\.){3}\d{1,3}").unwrap());
-    m.insert("email", Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}").unwrap());
+    m.insert(
+        "email",
+        Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}").unwrap(),
+    );
     m
 });
 
@@ -79,9 +91,10 @@ impl RuleEngine {
             .timeout(std::time::Duration::from_secs(30))
             .build()?;
         let resp = client.get(&self.source_url).send().await?.text().await?;
-        
-        let data: ClearUrlsData = serde_json::from_str(&resp).context("Failed to parse ClearURLs JSON")?;
-        
+
+        let data: ClearUrlsData =
+            serde_json::from_str(&resp).context("Failed to parse ClearURLs JSON")?;
+
         let mut compiled_providers = Vec::new();
 
         for (name, provider) in data.providers {
@@ -119,7 +132,7 @@ impl RuleEngine {
                 return Err(anyhow::anyhow!("Lock error"));
             }
         }
-        
+
         info!("Loaded {} providers", count);
         Ok(())
     }
@@ -129,17 +142,29 @@ impl RuleEngine {
         let client = match reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
             .redirect(reqwest::redirect::Policy::limited(5))
-            .build() {
-                Ok(c) => c,
-                Err(_) => return input_url.to_string(),
-            };
+            .build()
+        {
+            Ok(c) => c,
+            Err(_) => return input_url.to_string(),
+        };
 
         // We only want to expand common shorteners or if it looks like a redirector
         let url_lower = input_url.to_lowercase();
-        let shorteners = ["bit.ly", "tinyurl.com", "t.co", "goo.gl", "rebrand.ly", "buff.ly", "is.gd", "ow.ly", "t.me", "shorturl.at"];
-        
+        let shorteners = [
+            "bit.ly",
+            "tinyurl.com",
+            "t.co",
+            "goo.gl",
+            "rebrand.ly",
+            "buff.ly",
+            "is.gd",
+            "ow.ly",
+            "t.me",
+            "shorturl.at",
+        ];
+
         let is_shortener = shorteners.iter().any(|s| url_lower.contains(s));
-        
+
         if is_shortener {
             tracing::debug!(url = %input_url, "Attempting to expand shortened URL");
             if let Ok(resp) = client.head(input_url).send().await {
@@ -156,7 +181,9 @@ impl RuleEngine {
     pub fn redact_sensitive(&self, text: &str) -> String {
         let mut redacted = text.to_string();
         for (name, re) in SENSITIVE_PATTERNS.iter() {
-            redacted = re.replace_all(&redacted, format!("[REDACTED {}]", name.to_uppercase())).to_string();
+            redacted = re
+                .replace_all(&redacted, format!("[REDACTED {}]", name.to_uppercase()))
+                .to_string();
         }
         redacted
     }
@@ -164,10 +191,11 @@ impl RuleEngine {
     fn clean_github_url(&self, url: &mut Url) -> bool {
         if let Some(host) = url.host_str() {
             if host == "github.com" {
-                let path_segments: Vec<String> = url.path_segments()
+                let path_segments: Vec<String> = url
+                    .path_segments()
                     .map(|s| s.map(String::from).collect())
                     .unwrap_or_default();
-                
+
                 // If it's a deep link (e.g. /owner/repo/blob/main/file.ext), truncate to /owner/repo
                 if path_segments.len() > 2 {
                     let owner = &path_segments[0];
@@ -186,118 +214,134 @@ impl RuleEngine {
     }
 
     #[tracing::instrument(skip(self, custom_rules, ignored_domains))]
-    pub fn sanitize(&self, text: &str, custom_rules: &[crate::models::CustomRule], ignored_domains: &[String]) -> Option<(String, String)> {
+    pub fn sanitize(
+        &self,
+        text: &str,
+        custom_rules: &[crate::models::CustomRule],
+        ignored_domains: &[String],
+    ) -> Option<(String, String)> {
         tracing::debug!(url = %self.redact_sensitive(text), "Starting sanitization");
-        
+
         let mut url_to_parse = text.to_string();
         if !url_to_parse.contains("://") && !url_to_parse.starts_with("mailto:") {
             url_to_parse = format!("http://{}", url_to_parse);
         }
 
         if let Ok(mut url) = Url::parse(&url_to_parse) {
-             if let Some(host) = url.host_str() {
-                 if ignored_domains.iter().any(|d| host.contains(d)) {
-                     tracing::debug!(host = %host, "URL host is in ignored domains");
-                     return None;
-                 }
-             }
+            if let Some(host) = url.host_str() {
+                if ignored_domains.iter().any(|d| host.contains(d)) {
+                    tracing::debug!(host = %host, "URL host is in ignored domains");
+                    return None;
+                }
+            }
 
-             let mut provider_name = String::from("Custom/Other");
-             let github_changed = self.clean_github_url(&mut url);
-             if github_changed {
-                 provider_name = "GitHub (Repo Root)".to_string();
-             }
-             
-             // 1. Apply Custom User Rules FIRST
-             let mut custom_changed = false;
-             if let Some(_query) = url.query() {
-                 let query_pairs: Vec<(String, String)> = url.query_pairs().into_owned().collect();
-                 let mut new_query = url::form_urlencoded::Serializer::new(String::new());
-                 let mut any_kept = false;
-                 
-                 for (key, value) in query_pairs {
-                     let mut keep = true;
-                     for crule in custom_rules {
-                         if key.contains(&crule.pattern) {
-                             keep = false;
-                             custom_changed = true;
-                             tracing::debug!(param = %key, rule = %crule.pattern, "Custom rule matched");
-                             break;
-                         }
-                     }
-                     if keep {
-                         new_query.append_pair(&key, &value);
-                         any_kept = true;
-                     }
-                 }
+            let mut provider_name = String::from("Custom/Other");
+            let github_changed = self.clean_github_url(&mut url);
+            if github_changed {
+                provider_name = "GitHub (Repo Root)".to_string();
+            }
 
-                 if custom_changed {
-                     if any_kept {
-                         url.set_query(Some(&new_query.finish()));
-                     } else {
-                         url.set_query(None);
-                     }
-                 }
-             }
+            // 1. Apply Custom User Rules FIRST
+            let mut custom_changed = false;
+            if let Some(_query) = url.query() {
+                let query_pairs: Vec<(String, String)> = url.query_pairs().into_owned().collect();
+                let mut new_query = url::form_urlencoded::Serializer::new(String::new());
+                let mut any_kept = false;
 
-             // 2. Identify Provider
-             {
-                 if let Ok(providers) = self.providers.read() {
-                     for p in providers.iter() {
-                         if p.url_pattern.is_match(text) {
-                             provider_name = p.name.clone();
-                             tracing::debug!(provider = %provider_name, "Provider identified");
-                             break;
-                         }
-                     }
-                 }
-             }
+                for (key, value) in query_pairs {
+                    let mut keep = true;
+                    for crule in custom_rules {
+                        if key.contains(&crule.pattern) {
+                            keep = false;
+                            custom_changed = true;
+                            tracing::debug!(param = %key, rule = %crule.pattern, "Custom rule matched");
+                            break;
+                        }
+                    }
+                    if keep {
+                        new_query.append_pair(&key, &value);
+                        any_kept = true;
+                    }
+                }
 
-             // 3. Apply Extended Algorithm
-             let mut changed = self.clean_url_in_place(&mut url);
+                if custom_changed {
+                    if any_kept {
+                        url.set_query(Some(&new_query.finish()));
+                    } else {
+                        url.set_query(None);
+                    }
+                }
+            }
 
-             // 4. Aggressive Fallback for common trackers not in the ruleset
-             // (e.g. Google Search gs_lcrp, oq, client, etc.)
-             if let Some(_query) = url.query() {
-                 let query_pairs: Vec<(String, String)> = url.query_pairs().into_owned().collect();
-                 let mut new_query = url::form_urlencoded::Serializer::new(String::new());
-                 let mut aggressive_changed = false;
-                 let mut any_kept = false;
+            // 2. Identify Provider
+            {
+                if let Ok(providers) = self.providers.read() {
+                    for p in providers.iter() {
+                        if p.url_pattern.is_match(text) {
+                            provider_name = p.name.clone();
+                            tracing::debug!(provider = %provider_name, "Provider identified");
+                            break;
+                        }
+                    }
+                }
+            }
 
-                 let aggressive_trackers = [
-                     "gs_lcrp", "oq", "sourceid", "client", "bih", "biw", "ved", "ei", "iflsig", "adgrpid", "nw", "matchtype"
-                 ];
+            // 3. Apply Extended Algorithm
+            let mut changed = self.clean_url_in_place(&mut url);
 
-                 for (key, value) in query_pairs {
-                     if aggressive_trackers.contains(&key.as_str()) {
-                         aggressive_changed = true;
-                         tracing::debug!(param = %key, "Aggressive tracker stripped");
-                         continue;
-                     }
-                     new_query.append_pair(&key, &value);
-                     any_kept = true;
-                 }
+            // 4. Aggressive Fallback for common trackers not in the ruleset
+            // (e.g. Google Search gs_lcrp, oq, client, etc.)
+            if let Some(_query) = url.query() {
+                let query_pairs: Vec<(String, String)> = url.query_pairs().into_owned().collect();
+                let mut new_query = url::form_urlencoded::Serializer::new(String::new());
+                let mut aggressive_changed = false;
+                let mut any_kept = false;
 
-                 if aggressive_changed {
-                     changed = true;
-                     if any_kept {
-                         url.set_query(Some(&new_query.finish()));
-                     } else {
-                         url.set_query(None);
-                     }
-                 }
-             }
+                let aggressive_trackers = [
+                    "gs_lcrp",
+                    "oq",
+                    "sourceid",
+                    "client",
+                    "bih",
+                    "biw",
+                    "ved",
+                    "ei",
+                    "iflsig",
+                    "adgrpid",
+                    "nw",
+                    "matchtype",
+                ];
 
-             if changed || custom_changed || github_changed {
-                 let cleaned = url.to_string();
-                 tracing::info!(
-                     original = %self.redact_sensitive(text), 
-                     cleaned = %cleaned, 
-                     provider = %provider_name, 
-                     "URL successfully cleaned"
-                 );
-                 return Some((cleaned, provider_name));
-             }
+                for (key, value) in query_pairs {
+                    if aggressive_trackers.contains(&key.as_str()) {
+                        aggressive_changed = true;
+                        tracing::debug!(param = %key, "Aggressive tracker stripped");
+                        continue;
+                    }
+                    new_query.append_pair(&key, &value);
+                    any_kept = true;
+                }
+
+                if aggressive_changed {
+                    changed = true;
+                    if any_kept {
+                        url.set_query(Some(&new_query.finish()));
+                    } else {
+                        url.set_query(None);
+                    }
+                }
+            }
+
+            if changed || custom_changed || github_changed {
+                let cleaned = url.to_string();
+                tracing::info!(
+                    original = %self.redact_sensitive(text),
+                    cleaned = %cleaned,
+                    provider = %provider_name,
+                    "URL successfully cleaned"
+                );
+                return Some((cleaned, provider_name));
+            }
         }
         None
     }
@@ -317,7 +361,6 @@ impl RuleEngine {
                 for provider in providers.iter() {
                     // "generic" provider usually matches everything or has a catch-all pattern
                     if provider.url_pattern.is_match(&url_str) || provider.name == "generic" {
-                        
                         let mut provider_changed = false;
 
                         // Exceptions check
@@ -328,7 +371,9 @@ impl RuleEngine {
                                 break;
                             }
                         }
-                        if is_exception { continue; }
+                        if is_exception {
+                            continue;
+                        }
 
                         // Handle redirections
                         for redirection_regex in &provider.redirections {
@@ -344,19 +389,23 @@ impl RuleEngine {
                                 }
                             }
                         }
-                        
-                        if provider_changed { continue; }
+
+                        if provider_changed {
+                            continue;
+                        }
 
                         // Handle Query Parameters
                         if let Some(_query) = url.query() {
-                            let query_pairs: Vec<(String, String)> = url.query_pairs().into_owned().collect();
-                            let mut new_query = url::form_urlencoded::Serializer::new(String::new());
+                            let query_pairs: Vec<(String, String)> =
+                                url.query_pairs().into_owned().collect();
+                            let mut new_query =
+                                url::form_urlencoded::Serializer::new(String::new());
                             let mut params_removed = false;
                             let mut any_kept = false;
 
                             for (key, mut value) in query_pairs {
                                 let mut keep = true;
-                                
+
                                 // Apply rules
                                 for rule in &provider.rules {
                                     if rule.is_match(&key) {
@@ -404,22 +453,22 @@ impl RuleEngine {
                         // Handle Fragment (hash) - some tracking is after #
                         if let Some(fragment) = url.fragment() {
                             if fragment.contains('=') {
-                                 // Try to parse fragment as query string
-                                 let frag_url_str = format!("http://localhost?{}", fragment);
-                                 if let Ok(mut frag_url) = Url::parse(&frag_url_str) {
-                                     if self.clean_url_in_place(&mut frag_url) {
-                                         if let Some(new_frag) = frag_url.query() {
-                                             url.set_fragment(Some(new_frag));
-                                         } else {
-                                             url.set_fragment(None);
-                                         }
-                                         changed = true;
-                                         current_iteration_changed = true;
-                                     }
-                                 }
+                                // Try to parse fragment as query string
+                                let frag_url_str = format!("http://localhost?{}", fragment);
+                                if let Ok(mut frag_url) = Url::parse(&frag_url_str) {
+                                    if self.clean_url_in_place(&mut frag_url) {
+                                        if let Some(new_frag) = frag_url.query() {
+                                            url.set_fragment(Some(new_frag));
+                                        } else {
+                                            url.set_fragment(None);
+                                        }
+                                        changed = true;
+                                        current_iteration_changed = true;
+                                    }
+                                }
                             }
                         }
-                        
+
                         // Raw rules
                         let mut intermediate_url_str = url.to_string();
                         let mut raw_changed = false;
@@ -430,7 +479,7 @@ impl RuleEngine {
                                 raw_changed = true;
                             }
                         }
-                        
+
                         if raw_changed {
                             if let Ok(new_url) = Url::parse(&intermediate_url_str) {
                                 *url = new_url;
@@ -458,7 +507,7 @@ mod tests {
     #[tokio::test]
     async fn test_simple_cleaning() {
         let engine = RuleEngine::new_lazy("");
-        
+
         // Mock a generic provider
         {
             let mut w = engine.providers.write().unwrap();

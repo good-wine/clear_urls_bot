@@ -1,15 +1,9 @@
-use tracing_subscriber::{
-    fmt,
-    layer::SubscriberExt,
-    util::SubscriberInitExt,
-    EnvFilter,
-    Registry,
-};
-use tracing_error::ErrorLayer;
 use std::env;
+use tracing_error::ErrorLayer;
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 
 /// Initializes the logging and tracing system.
-/// 
+///
 /// Supports two modes based on the `APP_ENV` environment variable:
 /// - `development` (default): Pretty-printed, colored logs for console.
 /// - `production`: JSON-formatted logs for aggregation (Datadog, ELK, etc.).
@@ -24,18 +18,15 @@ pub fn init_logging() {
         .with(ErrorLayer::default());
 
     if env == "production" {
-        let json_layer = fmt::layer()
-            .json()
-            .with_thread_ids(true)
-            .with_target(true);
-        
+        let json_layer = fmt::layer().json().with_thread_ids(true).with_target(true);
+
         registry.with(json_layer).init();
     } else {
         let fmt_layer = fmt::layer()
             .pretty()
             .with_thread_ids(true)
             .with_target(true);
-            
+
         registry.with(fmt_layer).init();
     }
 

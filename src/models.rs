@@ -6,7 +6,7 @@ pub struct UserConfig {
     pub user_id: i64,
     pub enabled: i32,
     pub ai_enabled: i32,
-    pub mode: String, // "reply" or "delete"
+    pub mode: String,            // "reply" or "delete"
     pub ignored_domains: String, // Comma-separated list
     pub cleaned_count: i64,
     pub language: String, // "en", "it", etc.
