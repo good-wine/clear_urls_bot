@@ -13,10 +13,10 @@
     }
   ],
   "env": {
-    "DATABASE_URL": "@database_url",
-    "BOT_TOKEN": "@bot_token",
-    "BOT_USERNAME": "@bot_username",
-    "ADMIN_ID": "@admin_id",
-    "COOKIE_KEY": "@cookie_key"
+    "DATABASE_URL": "DATABASE_URL",
+    "BOT_TOKEN": "BOT_TOKEN",
+    "BOT_USERNAME": "BOT_USERNAME",
+    "ADMIN_ID": "ADMIN_ID",
+    "COOKIE_KEY": "COOKIE_KEY"
   }
 }
