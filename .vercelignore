@@ -1,0 +1,5 @@
+target/
+docker-compose.yml
+Dockerfile
+.env
+wasm-functions/target/

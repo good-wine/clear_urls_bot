@@ -1,26 +1,15 @@
-mod config;
-mod models;
-mod db;
-mod sanitizer;
-mod ai_sanitizer;
-mod bot;
-mod web;
-mod i18n;
-
-use teloxide::prelude::*;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use crate::config::Config;
-use crate::db::Db;
-use crate::sanitizer::RuleEngine;
-use crate::ai_sanitizer::AiEngine;
+use clear_urls_bot::config::Config;
+use clear_urls_bot::db::Db;
+use clear_urls_bot::sanitizer::RuleEngine;
+use clear_urls_bot::ai_sanitizer::AiEngine;
+use clear_urls_bot::bot;
+use clear_urls_bot::web;
+use clear_urls_bot::logging;
+use teloxide::Bot;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| "clear_urls_bot=info,teloxide=info".into()))
-        .with(tracing_subscriber::fmt::layer())
-        .init();
+    logging::init_logging();
 
     let config = Config::from_env();
     config.validate();

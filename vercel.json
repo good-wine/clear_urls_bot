@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/index.rs",
+      "use": "@vercel/rust"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "api/index.rs"
+    }
+  ],
+  "env": {
+    "DATABASE_URL": "@database_url",
+    "BOT_TOKEN": "@bot_token",
+    "BOT_USERNAME": "@bot_username",
+    "ADMIN_ID": "@admin_id",
+    "COOKIE_KEY": "@cookie_key"
+  }
+}

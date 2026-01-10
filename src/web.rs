@@ -65,21 +65,8 @@ struct CustomRuleForm {
     pattern: String,
 }
 
-pub async fn run_server(
-    config: Config, 
-    db: Db, 
-    event_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
-) {
-    let key = Key::generate();
-    
-    let state = AppState {
-        db: db.clone(),
-        config: config.clone(),
-        key,
-        event_tx: event_tx.clone(),
-    };
-
-    let app = Router::new()
+pub fn create_app(state: AppState) -> Router {
+    Router::new()
         .route("/", get(index))
         .route("/health", get(|| async { "OK" }))
         .route("/events", get(events_handler))
@@ -88,10 +75,10 @@ pub async fn run_server(
         .route("/auth/telegram/callback", get(auth_callback))
         .route("/logout", get(logout))
         .route("/dashboard/update", post(update_config))
-        .route("/dashboard/chat/toggle/:chat_id", post(toggle_chat))
-        .route("/dashboard/chat/mode/:chat_id", post(update_chat_mode))
+        .route("/dashboard/chat/toggle/{chat_id}", post(toggle_chat))
+        .route("/dashboard/chat/mode/{chat_id}", post(update_chat_mode))
         .route("/dashboard/custom_rule/add", post(add_custom_rule))
-        .route("/dashboard/custom_rule/delete/:id", post(delete_custom_rule))
+        .route("/dashboard/custom_rule/delete/{id}", post(delete_custom_rule))
         .route("/dashboard/export", get(export_history))
         .route("/admin", get(admin_dashboard))
         .layer(SetResponseHeaderLayer::overriding(
@@ -106,11 +93,32 @@ pub async fn run_server(
             header::X_CONTENT_TYPE_OPTIONS,
             HeaderValue::from_static("nosniff"),
         ))
-        .with_state(state);
+        .with_state(state)
+}
 
-    let listener = tokio::net::TcpListener::bind(&config.server_addr).await.unwrap();
+pub async fn run_server(
+    config: Config, 
+    db: Db, 
+    event_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
+) {
+    let key = if let Some(ref k) = config.cookie_key {
+        Key::from(k.as_bytes())
+    } else {
+        Key::generate()
+    };
+    
+    let state = AppState {
+        db: db.clone(),
+        config: config.clone(),
+        key,
+        event_tx: event_tx.clone(),
+    };
+
+    let app = create_app(state);
+
+    let listener = tokio::net::TcpListener::bind(&config.server_addr).await.expect("Failed to bind to address");
     info!("Web dashboard listening on {}", config.server_addr);
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app).await.expect("Failed to start server");
 }
 
 async fn index(
@@ -138,7 +146,10 @@ async fn index(
                 admin_id: state.config.admin_id,
                 tr,
             };
-            return Html(template.render().unwrap()).into_response();
+            return match template.render() {
+                Ok(html) => Html(html).into_response(),
+                Err(_) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Template Error").into_response(),
+            };
         }
     }
     Redirect::to("/login").into_response()
@@ -198,11 +209,14 @@ async fn delete_custom_rule(
     Redirect::to("/")
 }
 
-async fn login_page(State(state): State<AppState>) -> Html<String> {
+async fn login_page(State(state): State<AppState>) -> impl IntoResponse {
     let template = LoginTemplate {
         bot_username: state.config.bot_username,
     };
-    Html(template.render().unwrap())
+    match template.render() {
+        Ok(html) => Html(html).into_response(),
+        Err(_) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Template Error").into_response(),
+    }
 }
 
 async fn auth_callback(
@@ -213,14 +227,27 @@ async fn auth_callback(
     let token = &state.config.bot_token;
     
     if verify_telegram_auth(&params, token) {
+        let user_id_str = params.get("id");
+        if user_id_str.is_none() {
+             return Redirect::to("/login").into_response();
+        }
+
+        let user_id = user_id_str.and_then(|id| id.parse::<i64>().ok()).unwrap_or(0);
+        if user_id == 0 {
+             return Redirect::to("/login").into_response();
+        }
+
         let user = TelegramUserSession {
-            id: params.get("id").unwrap().parse().unwrap_or(0),
+            id: user_id,
             first_name: params.get("first_name").cloned().unwrap_or_default(),
             username: params.get("username").cloned(),
             photo_url: params.get("photo_url").cloned(),
         };
 
-        let cookie_val = serde_json::to_string(&user).unwrap();
+        let cookie_val = match serde_json::to_string(&user) {
+            Ok(v) => v,
+            Err(_) => return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Session Error").into_response(),
+        };
         let cookie = Cookie::build(("user_session", cookie_val))
             .path("/")
             .http_only(true)
@@ -306,7 +333,10 @@ async fn admin_dashboard(
             if user.id == state.config.admin_id {
                 let (total_cleaned, total_users) = state.db.get_global_stats().await.unwrap_or((0, 0));
                 let template = AdminTemplate { total_cleaned, total_users };
-                return Html(template.render().unwrap()).into_response();
+                return match template.render() {
+                    Ok(html) => Html(html).into_response(),
+                    Err(_) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Template Error").into_response(),
+                };
             }
         }
     }
@@ -332,11 +362,13 @@ async fn export_history(
                 ));
             }
             
-            return Response::builder()
+            return match Response::builder()
                 .header(header::CONTENT_TYPE, "text/csv")
                 .header(header::CONTENT_DISPOSITION, "attachment; filename=\"history.csv\"")
-                .body(axum::body::Body::from(csv))
-                .unwrap();
+                .body(axum::body::Body::from(csv)) {
+                    Ok(r) => r,
+                    Err(_) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Export Error").into_response(),
+                };
         }
     }
     Redirect::to("/login").into_response()
@@ -358,7 +390,9 @@ async fn events_handler(
         while let Ok(msg) = rx.recv().await {
             if let Some(target_user_id) = msg.get("user_id").and_then(|id| id.as_i64()) {
                 if target_user_id == user_id {
-                    yield Ok(Event::default().json_data(msg).unwrap());
+                    if let Ok(event) = Event::default().json_data(msg) {
+                        yield Ok(event);
+                    }
                 }
             }
         }
@@ -375,11 +409,12 @@ fn verify_telegram_auth(params: &HashMap<String, String>, token: &str) -> bool {
 
     if let Some(auth_date_str) = params.get("auth_date") {
         if let Ok(auth_date) = auth_date_str.parse::<u64>() {
-            let now = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs();
-            if now - auth_date > 86400 {
+            let now = match std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH) {
+                    Ok(d) => d.as_secs(),
+                    Err(_) => 0,
+                };
+            if now > 0 && now - auth_date > 86400 {
                 return false;
             }
         }
@@ -389,7 +424,7 @@ fn verify_telegram_auth(params: &HashMap<String, String>, token: &str) -> bool {
     keys.sort();
 
     let data_check_string = keys.iter() 
-        .map(|k| format!("{}={}", k, params.get(*k).unwrap()))
+        .map(|k| format!("{}={}", k, params.get(*k).map(|s| s.as_str()).unwrap_or("")))
         .collect::<Vec<String>>()
         .join("\n");
 

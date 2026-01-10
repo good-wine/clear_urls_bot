@@ -1,15 +1,17 @@
-use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
+use sqlx::{any::AnyPoolOptions, Pool, Any};
 use anyhow::Result;
 use crate::models::{UserConfig, ChatConfig};
 
 #[derive(Clone)]
 pub struct Db {
-    pub pool: Pool<Postgres>,
+    pub pool: Pool<Any>,
 }
 
 impl Db {
     pub async fn new(database_url: &str) -> Result<Self> {
-        let pool = PgPoolOptions::new()
+        sqlx::any::install_default_drivers();
+        
+        let pool = AnyPoolOptions::new()
             .max_connections(5)
             .connect(database_url)
             .await?;
@@ -20,7 +22,19 @@ impl Db {
     }
 
     async fn init(&self) -> Result<()> {
-        sqlx::query(
+        let is_sqlite = self.pool.connect_options().database_url.scheme() == "sqlite";
+
+        let create_user_configs = if is_sqlite {
+            "CREATE TABLE IF NOT EXISTS user_configs (
+                user_id INTEGER PRIMARY KEY,
+                enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                ai_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+                mode TEXT NOT NULL DEFAULT 'reply',
+                ignored_domains TEXT NOT NULL DEFAULT '',
+                cleaned_count INTEGER NOT NULL DEFAULT 0,
+                language TEXT NOT NULL DEFAULT 'en'
+            )"
+        } else {
             "CREATE TABLE IF NOT EXISTS user_configs (
                 user_id BIGINT PRIMARY KEY,
                 enabled BOOLEAN NOT NULL DEFAULT TRUE,
@@ -30,25 +44,25 @@ impl Db {
                 cleaned_count BIGINT NOT NULL DEFAULT 0,
                 language TEXT NOT NULL DEFAULT 'en'
             )"
-        )
-        .execute(&self.pool)
-        .await?;
+        };
 
-        // Simple check to add columns if they don't exist
-        let _ = sqlx::query("ALTER TABLE user_configs ADD COLUMN IF NOT EXISTS ai_enabled BOOLEAN NOT NULL DEFAULT FALSE")
-            .execute(&self.pool)
-            .await;
-        let _ = sqlx::query("ALTER TABLE user_configs ADD COLUMN IF NOT EXISTS ignored_domains TEXT NOT NULL DEFAULT ''")
-            .execute(&self.pool)
-            .await;
-        let _ = sqlx::query("ALTER TABLE user_configs ADD COLUMN IF NOT EXISTS cleaned_count BIGINT NOT NULL DEFAULT 0")
-            .execute(&self.pool)
-            .await;
-        let _ = sqlx::query("ALTER TABLE user_configs ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'en'")
-            .execute(&self.pool)
-            .await;
+        sqlx::query(create_user_configs).execute(&self.pool).await?;
 
-        sqlx::query(
+        // migrations
+        let _ = sqlx::query("ALTER TABLE user_configs ADD COLUMN ai_enabled BOOLEAN NOT NULL DEFAULT FALSE").execute(&self.pool).await;
+        let _ = sqlx::query("ALTER TABLE user_configs ADD COLUMN ignored_domains TEXT NOT NULL DEFAULT ''").execute(&self.pool).await;
+        let _ = sqlx::query("ALTER TABLE user_configs ADD COLUMN cleaned_count BIGINT NOT NULL DEFAULT 0").execute(&self.pool).await;
+        let _ = sqlx::query("ALTER TABLE user_configs ADD COLUMN language TEXT NOT NULL DEFAULT 'en'").execute(&self.pool).await;
+
+        let create_chat_configs = if is_sqlite {
+            "CREATE TABLE IF NOT EXISTS chat_configs (
+                chat_id INTEGER PRIMARY KEY,
+                title TEXT,
+                enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                added_by INTEGER NOT NULL,
+                mode TEXT NOT NULL DEFAULT 'default'
+            )"
+        } else {
             "CREATE TABLE IF NOT EXISTS chat_configs (
                 chat_id BIGINT PRIMARY KEY,
                 title TEXT,
@@ -56,25 +70,35 @@ impl Db {
                 added_by BIGINT NOT NULL,
                 mode TEXT NOT NULL DEFAULT 'default'
             )"
-        )
-        .execute(&self.pool)
-        .await?;
+        };
+        sqlx::query(create_chat_configs).execute(&self.pool).await?;
+        let _ = sqlx::query("ALTER TABLE chat_configs ADD COLUMN mode TEXT NOT NULL DEFAULT 'default'").execute(&self.pool).await;
 
-        let _ = sqlx::query("ALTER TABLE chat_configs ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'default'")
-            .execute(&self.pool)
-            .await;
-
-        sqlx::query(
+        let create_rules = if is_sqlite {
+            "CREATE TABLE IF NOT EXISTS custom_rules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                pattern TEXT NOT NULL
+            )"
+        } else {
             "CREATE TABLE IF NOT EXISTS custom_rules (
                 id SERIAL PRIMARY KEY,
                 user_id BIGINT NOT NULL,
                 pattern TEXT NOT NULL
             )"
-        )
-        .execute(&self.pool)
-        .await?;
+        };
+        sqlx::query(create_rules).execute(&self.pool).await?;
 
-        sqlx::query(
+        let create_history = if is_sqlite {
+            "CREATE TABLE IF NOT EXISTS cleaned_links (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                original_url TEXT NOT NULL,
+                cleaned_url TEXT NOT NULL,
+                provider_name TEXT,
+                timestamp INTEGER NOT NULL
+            )"
+        } else {
             "CREATE TABLE IF NOT EXISTS cleaned_links (
                 id SERIAL PRIMARY KEY,
                 user_id BIGINT NOT NULL,
@@ -83,13 +107,9 @@ impl Db {
                 provider_name TEXT,
                 timestamp BIGINT NOT NULL
             )"
-        )
-        .execute(&self.pool)
-        .await?;
-
-        let _ = sqlx::query("ALTER TABLE cleaned_links ADD COLUMN IF NOT EXISTS provider_name TEXT")
-            .execute(&self.pool)
-            .await;
+        };
+        sqlx::query(create_history).execute(&self.pool).await?;
+        let _ = sqlx::query("ALTER TABLE cleaned_links ADD COLUMN provider_name TEXT").execute(&self.pool).await;
 
         Ok(())
     }
@@ -100,7 +120,7 @@ impl Db {
             .as_secs() as i64;
 
         sqlx::query(
-            "INSERT INTO cleaned_links (user_id, original_url, cleaned_url, provider_name, timestamp) VALUES ($1, $2, $3, $4, $5)"
+            "INSERT INTO cleaned_links (user_id, original_url, cleaned_url, provider_name, timestamp) VALUES (?, ?, ?, ?, ?)"
         )
         .bind(user_id)
         .bind(original)
@@ -114,7 +134,7 @@ impl Db {
 
     pub async fn get_history(&self, user_id: i64, limit: i64) -> Result<Vec<crate::models::CleanedLink>> {
         let history = sqlx::query_as::<_, crate::models::CleanedLink>(
-            "SELECT * FROM cleaned_links WHERE user_id = $1 ORDER BY timestamp DESC LIMIT $2"
+            "SELECT * FROM cleaned_links WHERE user_id = ? ORDER BY timestamp DESC LIMIT ?"
         )
         .bind(user_id)
         .bind(limit)
@@ -135,7 +155,7 @@ impl Db {
 
     pub async fn get_user_config(&self, user_id: i64) -> Result<UserConfig> {
         let config = sqlx::query_as::<_, UserConfig>(
-            "SELECT * FROM user_configs WHERE user_id = $1"
+            "SELECT * FROM user_configs WHERE user_id = ?"
         )
         .bind(user_id)
         .fetch_optional(&self.pool)
@@ -154,8 +174,8 @@ impl Db {
 
     pub async fn save_user_config(&self, config: &UserConfig) -> Result<()> {
         sqlx::query(
-            "INSERT INTO user_configs (user_id, enabled, ai_enabled, mode, ignored_domains, cleaned_count, language) VALUES ($1, $2, $3, $4, $5, $6, $7)
-             ON CONFLICT(user_id) DO UPDATE SET enabled = $2, ai_enabled = $3, mode = $4, ignored_domains = $5, cleaned_count = $6, language = $7"
+            "INSERT INTO user_configs (user_id, enabled, ai_enabled, mode, ignored_domains, cleaned_count, language) VALUES (?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(user_id) DO UPDATE SET enabled = excluded.enabled, ai_enabled = excluded.ai_enabled, mode = excluded.mode, ignored_domains = excluded.ignored_domains, cleaned_count = excluded.cleaned_count, language = excluded.language"
         )
         .bind(config.user_id)
         .bind(config.enabled)
@@ -171,7 +191,7 @@ impl Db {
 
     pub async fn increment_cleaned_count(&self, user_id: i64, amount: i64) -> Result<()> {
         sqlx::query(
-            "UPDATE user_configs SET cleaned_count = cleaned_count + $1 WHERE user_id = $2"
+            "UPDATE user_configs SET cleaned_count = cleaned_count + ? WHERE user_id = ?"
         )
         .bind(amount)
         .bind(user_id)
@@ -182,7 +202,7 @@ impl Db {
 
     pub async fn get_custom_rules(&self, user_id: i64) -> Result<Vec<crate::models::CustomRule>> {
         let rules = sqlx::query_as::<_, crate::models::CustomRule>(
-            "SELECT * FROM custom_rules WHERE user_id = $1"
+            "SELECT * FROM custom_rules WHERE user_id = ?"
         )
         .bind(user_id)
         .fetch_all(&self.pool)
@@ -191,7 +211,7 @@ impl Db {
     }
 
     pub async fn add_custom_rule(&self, user_id: i64, pattern: &str) -> Result<()> {
-        sqlx::query("INSERT INTO custom_rules (user_id, pattern) VALUES ($1, $2)")
+        sqlx::query("INSERT INTO custom_rules (user_id, pattern) VALUES (?, ?)")
             .bind(user_id)
             .bind(pattern)
             .execute(&self.pool)
@@ -200,21 +220,29 @@ impl Db {
     }
 
     pub async fn get_stats_by_day(&self, user_id: i64) -> Result<Vec<(String, i64)>> {
-        let stats = sqlx::query_as::<_, (String, i64)>(
+        let is_sqlite = self.pool.connect_options().database_url.scheme() == "sqlite";
+        let query = if is_sqlite {
+            "SELECT date(timestamp, 'unixepoch') as day, COUNT(*) 
+             FROM cleaned_links 
+             WHERE user_id = ? 
+             GROUP BY day ORDER BY day DESC LIMIT 7"
+        } else {
             "SELECT to_char(to_timestamp(timestamp), 'YYYY-MM-DD') as day, COUNT(*) 
              FROM cleaned_links 
-             WHERE user_id = $1 
+             WHERE user_id = ? 
              GROUP BY day ORDER BY day DESC LIMIT 7"
-        )
-        .bind(user_id)
-        .fetch_all(&self.pool)
-        .await?;
+        };
+
+        let stats = sqlx::query_as::<_, (String, i64)>(query)
+            .bind(user_id)
+            .fetch_all(&self.pool)
+            .await?;
         Ok(stats)
     }
 
     pub async fn get_chat_config(&self, chat_id: i64) -> Result<ChatConfig> {
         let config = sqlx::query_as::<_, ChatConfig>(
-            "SELECT * FROM chat_configs WHERE chat_id = $1"
+            "SELECT * FROM chat_configs WHERE chat_id = ?"
         )
         .bind(chat_id)
         .fetch_optional(&self.pool)
@@ -231,8 +259,8 @@ impl Db {
 
     pub async fn save_chat_config(&self, config: &ChatConfig) -> Result<()> {
         sqlx::query(
-            "INSERT INTO chat_configs (chat_id, title, enabled, added_by, mode) VALUES ($1, $2, $3, $4, $5)
-             ON CONFLICT(chat_id) DO UPDATE SET title = $2, enabled = $3, mode = $5"
+            "INSERT INTO chat_configs (chat_id, title, enabled, added_by, mode) VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT(chat_id) DO UPDATE SET title = excluded.title, enabled = excluded.enabled, mode = excluded.mode"
         )
         .bind(config.chat_id)
         .bind(&config.title)
@@ -246,7 +274,7 @@ impl Db {
 
     pub async fn get_chats_for_user(&self, user_id: i64) -> Result<Vec<ChatConfig>> {
         let chats = sqlx::query_as::<_, ChatConfig>(
-            "SELECT * FROM chat_configs WHERE added_by = $1"
+            "SELECT * FROM chat_configs WHERE added_by = ?"
         )
         .bind(user_id)
         .fetch_all(&self.pool)

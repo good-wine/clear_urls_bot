@@ -1,8 +1,20 @@
 # ClearURLs Telegram Bot 🛡️
 
-A professional, high-performance Rust-based Telegram bot that automatically removes tracking parameters from URLs using the ClearURLs ruleset. Featuring a real-time, accessible web dashboard and advanced management features.
+[![Rust](https://img.shields.io/badge/rust-2021-orange.svg)](https://www.rust-lang.org)
+[![Vercel](https://img.shields.io/badge/deployed-vercel-black.svg)](https://vercel.com)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![WASM](https://img.shields.io/badge/WASM-supported-blueviolet.svg)](wasm-functions/)
 
-## 🌟 Advanced Features
+A professional, high-performance Rust-based Telegram bot that automatically removes tracking parameters from URLs. Featuring a modular architecture, real-time web dashboard, and serverless cloud support.
+
+## 📖 Documentation
+
+- **[Architecture Guide](docs/ARCHITECTURE.md)**: Deep dive into the modular structure and data flow.
+- **[API & Dashboard](docs/API.md)**: Details on web routes and management features.
+- **[Contributing](CONTRIBUTING.md)**: How to set up development and submit changes.
+- **[Changelog](CHANGELOG.md)**: History of releases and updates.
+
+## 🌟 Key Features
 
 - **Real-Time Dashboard**: Updates stats and history instantly via **Server-Sent Events (SSE)** without page reloads.
 - **Telegram Web App Integration**: Access the full management dashboard directly inside Telegram.
@@ -25,22 +37,17 @@ A professional, high-performance Rust-based Telegram bot that automatically remo
 1. **Clone & Configure**:
    - Copy `.env.example` to `.env`.
    - Set `TELOXIDE_TOKEN`, `BOT_USERNAME`, `DASHBOARD_URL`, and `ADMIN_ID`.
+   - **Important**: Generate a random `COOKIE_KEY` for session persistence.
    - (Optional) Set `AI_API_KEY`, `AI_API_BASE`, and `AI_MODEL` for AI Deep Scan.
-2. **Setup Telegram Domain**:
-   - Use `/setdomain` in [@BotFather](https://t.me/BotFather) to point to your `DASHBOARD_URL`.
-3. **Run with Docker**:
-   ```bash
-   docker-compose up --build
-   ```
-   *Or locally with `cargo run --release`.*
+
+...
 
 ## 🏗️ Technical Architecture
 
-- **Backend**: Rust 2021, Axum (Web), Teloxide (Bot).
+- **Backend**: Rust 2021, Axum 0.8 (Web), Teloxide 0.17 (Bot).
+- **Database**: sqlx::Any (SQLite/PostgreSQL) with dynamic backend detection.
 - **Real-time**: Async broadcast channels with SSE streaming.
-- **Frontend**: Accessible HTML5/JS with Chart.js and native Dark Mode support.
-- **Database**: SQLite with SQLx and automatic schema migrations.
-- **Reliability**: Config validation on startup and `/health` endpoint for monitoring.
+- **Stability**: Zero-panic core logic with comprehensive `tracing` instrumentation.
 
 ## 📝 License
 

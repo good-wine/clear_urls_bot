@@ -1,4 +1,8 @@
-use teloxide::{prelude::*, types::{MessageEntityKind, ParseMode}, utils::html};
+use teloxide::{
+    prelude::*,
+    types::{ParseMode, ReplyParameters, MessageEntityKind},
+    utils::html,
+};
 use crate::{sanitizer::RuleEngine, ai_sanitizer::AiEngine, db::Db, models::ChatConfig, i18n};
 
 pub async fn run_bot(
@@ -20,6 +24,10 @@ pub async fn run_bot(
         .await;
 }
 
+#[tracing::instrument(
+    skip(bot, db, rules, ai, config, event_tx),
+    fields(chat_id = %msg.chat.id, user_id)
+)]
 async fn handle_message(
     bot: Bot,
     msg: Message,
@@ -30,43 +38,53 @@ async fn handle_message(
     event_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
 ) -> ResponseResult<()> {
     let chat_id = msg.chat.id;
-    let user_id = msg.from().map(|u| u.id.0 as i64).unwrap_or(0);
+    let user_id = msg.from.as_ref().map(|u| u.id.0 as i64).unwrap_or(0);
+    tracing::Span::current().record("user_id", user_id);
+    
     let user_config = db.get_user_config(user_id).await.unwrap_or_default();
     let tr = i18n::get_translations(&user_config.language);
 
-    // ... existing start/help commands ...
+    // Handle Commands
     if let Some(text) = msg.text() {
-        if text.starts_with('/') && msg.chat.is_private() {
-            match text {
-                "/start" => {
-                    let keyboard = teloxide::types::InlineKeyboardMarkup::new(vec![
-                        vec![teloxide::types::InlineKeyboardButton::url(
-                            tr.open_dashboard,
-                            config.dashboard_url.parse().unwrap(),
-                        )],
-                        vec![teloxide::types::InlineKeyboardButton::web_app(
-                            "📱 Open Web App",
-                            teloxide::types::WebAppInfo { url: config.dashboard_url.parse().unwrap() },
-                        )]
-                    ]);
+        if text.starts_with('/') {
+            let cmd = text.split('@').next().unwrap_or("");
+            let is_private = msg.chat.is_private();
+            let bot_username = format!("@{}", config.bot_username);
+            let is_targeted = text.contains(&bot_username) || is_private;
 
-                    let welcome_text = tr.welcome.replace("{}", &user_id.to_string());
-                    bot.send_message(chat_id, welcome_text)
-                        .parse_mode(ParseMode::Html)
-                        .reply_markup(keyboard)
-                        .await?;
-                    return Ok(());
+            if is_targeted {
+                match cmd {
+                    "/start" => {
+                        tracing::info!("Handling /start command for user {}", user_id);
+                        let keyboard = teloxide::types::InlineKeyboardMarkup::new(vec![
+                            vec![teloxide::types::InlineKeyboardButton::url(
+                                tr.open_dashboard,
+                                config.dashboard_url.clone(),
+                            )],
+                            vec![teloxide::types::InlineKeyboardButton::web_app(
+                                "📱 Open Web App",
+                                teloxide::types::WebAppInfo { url: config.dashboard_url.clone() },
+                            )]
+                        ]);
+
+                        let welcome_text = tr.welcome.replace("{}", &user_id.to_string());
+                        bot.send_message(chat_id, welcome_text)
+                            .parse_mode(ParseMode::Html)
+                            .reply_markup(keyboard)
+                            .await?;
+                        return Ok(());
+                    }
+                    "/help" => {
+                        bot.send_message(chat_id, tr.help_text).parse_mode(ParseMode::Html).await?;
+                        return Ok(());
+                    }
+                    "/stats" => {
+                        let stats_text = tr.stats_text.replace("{}", &user_config.cleaned_count.to_string());
+                        bot.send_message(chat_id, stats_text).parse_mode(ParseMode::Html).await?;
+                        return Ok(());
+                    }
+                    _ => {}
                 }
-                "/help" => {
-                    bot.send_message(chat_id, tr.help_text).parse_mode(ParseMode::Html).await?;
-                    return Ok(());
-                }
-                "/stats" => {
-                    let stats_text = tr.stats_text.replace("{}", &user_config.cleaned_count.to_string());
-                    bot.send_message(chat_id, stats_text).parse_mode(ParseMode::Html).await?;
-                    return Ok(());
-                }
-                _ => {}
             }
         }
     }
@@ -183,7 +201,10 @@ async fn handle_message(
             "original_url": orig,
             "cleaned_url": clean,
             "provider_name": prov,
-            "timestamp": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
+            "timestamp": std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0)
         }));
     }
 
@@ -192,25 +213,23 @@ async fn handle_message(
         m => m.to_string(),
     };
 
-    if mode == "delete" {
-         if bot.delete_message(chat_id, msg.id).await.is_ok() {
-             let user_name = msg.from().map(|u| u.first_name.clone()).unwrap_or("User".into());
-             let mut response = tr.cleaned_for.replace("{}", &html::escape(&user_name));
-             for (_, cleaned, _) in &cleaned_urls {
-                 response.push_str(&format!("• <a href=\"{}\">{}</a>\n", html::escape(&cleaned), html::escape(&cleaned)));
-             }
-             bot.send_message(chat_id, response).parse_mode(ParseMode::Html).await?;
-             return Ok(());
-         }
+    if mode == "delete" && bot.delete_message(chat_id, msg.id).await.is_ok() {
+        let user_name = msg.from.as_ref().map(|u| u.first_name.clone()).unwrap_or_else(|| "User".into());
+        let mut response = tr.cleaned_for.replace("{}", &html::escape(&user_name));
+        for (_, cleaned, _) in &cleaned_urls {
+            response.push_str(&format!("• <a href=\"{}\">{}</a>\n", html::escape(cleaned), html::escape(cleaned)));
+        }
+        bot.send_message(chat_id, response).parse_mode(ParseMode::Html).await?;
+        return Ok(());
     }
 
     let mut response = String::from(tr.cleaned_links);
     for (_, cleaned, _) in &cleaned_urls {
-         response.push_str(&format!("• {}\n", html::escape(&cleaned)));
+         response.push_str(&format!("• {}\n", html::escape(cleaned)));
     }
     
     bot.send_message(chat_id, response)
-        .reply_to_message_id(msg.id)
+        .reply_parameters(ReplyParameters::new(msg.id))
         .parse_mode(ParseMode::Html)
         .await?;
 
