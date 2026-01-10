@@ -207,7 +207,7 @@ impl RuleEngine {
 
              // 4. Aggressive Fallback for common trackers not in the ruleset
              // (e.g. Google Search gs_lcrp, oq, client, etc.)
-             if let Some(query) = url.query() {
+             if let Some(_query) = url.query() {
                  let query_pairs: Vec<(String, String)> = url.query_pairs().into_owned().collect();
                  let mut new_query = url::form_urlencoded::Serializer::new(String::new());
                  let mut aggressive_changed = false;

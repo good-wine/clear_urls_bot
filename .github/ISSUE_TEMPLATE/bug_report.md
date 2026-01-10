@@ -17,7 +17,7 @@ Steps to reproduce the behavior:
 3. Expected output '...'
 
 **Environment**
-- OS: (e.g. Linux, Docker, Vercel)
+- OS: (e.g. Linux, Podman, Vercel)
 - Version: (e.g. 1.1.0)
 - Log Output: (if applicable)
 

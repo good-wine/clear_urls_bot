@@ -99,11 +99,11 @@
                 <h2 id="settings-title">⚙️ {{ tr.d_global_settings }}</h2>
                 <form action="/dashboard/update" method="POST" id="config-form">
                     <div class="form-group" style="display: flex; align-items: center; gap: 0.7rem; margin-bottom: 0.5rem;">
-                        <input type="checkbox" id="enabled" name="enabled" {% if config.enabled %}checked{% endif %} style="width: auto;">
+                        <input type="checkbox" id="enabled" name="enabled" {% if config.is_enabled() %}checked{% endif %} style="width: auto;">
                         <label for="enabled" style="margin:0;">{{ tr.d_enable_bot }}</label>
                     </div>
                     <div class="form-group" style="display: flex; align-items: center; gap: 0.7rem; margin-bottom: 1.5rem;">
-                        <input type="checkbox" id="ai_enabled" name="ai_enabled" {% if config.ai_enabled %}checked{% endif %} style="width: auto;">
+                        <input type="checkbox" id="ai_enabled" name="ai_enabled" {% if config.is_ai_enabled() %}checked{% endif %} style="width: auto;">
                         <label for="ai_enabled" style="margin:0;">{{ tr.d_enable_ai }}</label>
                     </div>
                     <div class="form-group">
@@ -134,11 +134,14 @@
                         <div class="chat-item">
                             <div class="chat-header">
                                 <span style="font-weight: 700;">
-                                    {% if let Some(title) = chat.title %}{{ title }}{% else %}Private Chat{% endif %}
+                                    {% match chat.title %}
+                                        {% when Some with (val) %}{{ val }}
+                                        {% when None %}Private Chat
+                                    {% endmatch %}
                                 </span>
                                 <form action="/dashboard/chat/toggle/{{ chat.chat_id }}" method="POST">
-                                    <button type="submit" style="background: {% if chat.enabled %}var(--success){% else %}var(--danger){% endif %}; padding: 0.3rem 0.7rem; font-size: 0.7rem; border-radius: 20px;">
-                                        {% if chat.enabled %}ACTIVE{% else %}PAUSED{% endif %}
+                                    <button type="submit" style="background: {% if chat.is_enabled() %}var(--success){% else %}var(--danger){% endif %}; padding: 0.3rem 0.7rem; font-size: 0.7rem; border-radius: 20px;">
+                                        {% if chat.is_enabled() %}ACTIVE{% else %}PAUSED{% endif %}
                                     </button>
                                 </form>
                             </div>
@@ -172,7 +175,11 @@
                         <tr>
                             <td class="url-text" style="color: var(--danger); opacity: 0.8;">{{ link.original_url }}</td>
                             <td class="url-text" style="color: var(--success); font-weight: 600;">{{ link.cleaned_url }}</td>
-                            <td><span class="badge badge-green" style="background: var(--primary); color: white; opacity: 0.9;">{{ link.provider_name.clone().unwrap_or_default() }}</span></td>
+                            <td>
+                                <span class="badge badge-green" style="background: var(--primary); color: white; opacity: 0.9;">
+                                    {% if let Some(provider) = link.provider_name %}{{ provider }}{% else %}Unknown{% endif %}
+                                </span>
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>

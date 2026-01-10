@@ -24,7 +24,7 @@ A professional, high-performance Rust-based Telegram bot that automatically remo
 - **Shortlink Expansion**: Automatically follows redirects from services like bit.ly or tinyurl to uncover and strip underlying trackers.
 - **Deep Auditing**: Track which provider (Amazon, Google, etc.) cleaned each link.
 - **CSV Export**: Download your full cleaning history for personal analysis.
-- **Enterprise Ready**: Multi-stage Docker build and automatic configuration validation.
+- **Enterprise Ready**: Multi-stage Podman build and automatic configuration validation.
 
 ## 🛠️ Bot Commands
 
@@ -40,7 +40,11 @@ A professional, high-performance Rust-based Telegram bot that automatically remo
    - **Important**: Generate a random `COOKIE_KEY` for session persistence.
    - (Optional) Set `AI_API_KEY`, `AI_API_BASE`, and `AI_MODEL` for AI Deep Scan.
 
-...
+3. **Run with Podman**:
+   ```bash
+   podman-compose up --build -d
+   ```
+   *Or locally with `cargo run --release`.*
 
 ## 🏗️ Technical Architecture
 

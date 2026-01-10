@@ -102,7 +102,14 @@ pub async fn run_server(
     event_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
 ) {
     let key = if let Some(ref k) = config.cookie_key {
-        Key::from(k.as_bytes())
+        if k.len() < 64 {
+            // If the key is too short, we derive a 64-byte key using SHA-512
+            use sha2::{Sha512, Digest};
+            let hash = Sha512::digest(k.as_bytes());
+            Key::from(&hash)
+        } else {
+            Key::from(k.as_bytes())
+        }
     } else {
         Key::generate()
     };
@@ -282,8 +289,8 @@ async fn update_config(
     if let Some(user_cookie) = jar.get("user_session") {
         if let Ok(user) = serde_json::from_str::<TelegramUserSession>(user_cookie.value()) {
             let user_config = state.db.get_user_config(user.id).await.unwrap_or_default();
-            let enabled = form.enabled.is_some();
-            let ai_enabled = form.ai_enabled.is_some();
+            let enabled = if form.enabled.is_some() { 1 } else { 0 };
+            let ai_enabled = if form.ai_enabled.is_some() { 1 } else { 0 };
             let config = UserConfig {
                 user_id: user.id,
                 enabled,
@@ -308,7 +315,7 @@ async fn toggle_chat(
         if let Ok(user) = serde_json::from_str::<TelegramUserSession>(user_cookie.value()) {
             if let Ok(mut chat_config) = state.db.get_chat_config_or_default(chat_id).await {
                 if chat_config.added_by == user.id {
-                    chat_config.enabled = !chat_config.enabled;
+                    chat_config.enabled = if chat_config.enabled == 0 { 1 } else { 0 };
                     let _ = state.db.save_chat_config(&chat_config).await;
                 }
             }

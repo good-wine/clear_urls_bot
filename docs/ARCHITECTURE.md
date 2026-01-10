@@ -13,7 +13,7 @@ The backbone of the application. It exports all core modules:
 - `web`: Axum-based web dashboard and API. Re-engineered for Axum 0.8 compatibility.
 
 ### 2. Standalone Binary (`src/main.rs`)
-Used for Docker and local deployments. It initializes the database, starts the Telegram bot (long polling), and runs the Axum web server concurrently using `tokio::select!`.
+Used for Podman and local deployments. It initializes the database, starts the Telegram bot (long polling), and runs the Axum web server concurrently using `tokio::select!`.
 
 ### 3. WASM Module (`wasm-functions/`)
 A standalone Rust crate that compiles the sanitization logic to WebAssembly, allowing for zero-latency URL cleaning in the browser.
@@ -33,7 +33,7 @@ The system uses SQLx with automatic migrations and dynamic backend detection.
 
 ## 🐳 Containerized Deployment
 
-The project is optimized for high-performance Docker hosting with the following features:
+The project is optimized for high-performance Podman hosting with the following features:
 
 - **Security**: The container runs as a non-root `clearurls` user.
 - **Reliability**: Integrated `HEALTHCHECK` ensures the host can automatically restart failing containers.

@@ -27,8 +27,8 @@ impl Db {
         let create_user_configs = if is_sqlite {
             "CREATE TABLE IF NOT EXISTS user_configs (
                 user_id INTEGER PRIMARY KEY,
-                enabled BOOLEAN NOT NULL DEFAULT TRUE,
-                ai_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                ai_enabled INTEGER NOT NULL DEFAULT 0,
                 mode TEXT NOT NULL DEFAULT 'reply',
                 ignored_domains TEXT NOT NULL DEFAULT '',
                 cleaned_count INTEGER NOT NULL DEFAULT 0,
@@ -58,7 +58,7 @@ impl Db {
             "CREATE TABLE IF NOT EXISTS chat_configs (
                 chat_id INTEGER PRIMARY KEY,
                 title TEXT,
-                enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                enabled INTEGER NOT NULL DEFAULT 1,
                 added_by INTEGER NOT NULL,
                 mode TEXT NOT NULL DEFAULT 'default'
             )"
@@ -163,8 +163,8 @@ impl Db {
 
         Ok(config.unwrap_or(UserConfig {
             user_id,
-            enabled: true,
-            ai_enabled: false,
+            enabled: 1,
+            ai_enabled: 0,
             mode: "reply".to_string(),
             ignored_domains: String::new(),
             cleaned_count: 0,
@@ -263,7 +263,7 @@ impl Db {
         Ok(config.unwrap_or(ChatConfig {
             chat_id,
             title: None,
-            enabled: true,
+            enabled: 1,
             added_by: 0,
             mode: "default".to_string(),
         }))

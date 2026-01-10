@@ -6,7 +6,7 @@ Thank you for your interest in contributing! We welcome all contributions that h
 
 1. **Prerequisites**: 
    - [Rust](https://www.rust-lang.org/tools/install) (latest stable)
-   - [Docker](https://docs.docker.com/get-docker/) & [Docker Compose](https://docs.docker.com/compose/install/)
+   - [Podman](https://podman.io/getting-started/installation) & [Podman Compose](https://github.com/containers/podman-compose)
    - [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/) (for WASM changes)
 
 2. **Clone & Config**:

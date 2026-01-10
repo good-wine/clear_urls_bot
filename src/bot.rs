@@ -1,5 +1,5 @@
 use teloxide::prelude::*;
-use teloxide::types::{ParseMode, ReplyParameters, MessageEntityKind, LinkPreviewOptions};
+use teloxide::types::{ParseMode, ReplyParameters, MessageEntityKind};
 use teloxide::utils::html;
 use regex::Regex;
 use crate::{sanitizer::RuleEngine, ai_sanitizer::AiEngine, db::Db, i18n};
@@ -41,7 +41,10 @@ async fn handle_message(
     let user_id = msg.from.as_ref().map(|u| u.id.0 as i64).unwrap_or(0);
     tracing::Span::current().record("user_id", user_id);
     
-    let user_config = db.get_user_config(user_id).await.unwrap_or_default();
+    let user_config = db.get_user_config(user_id).await.unwrap_or_else(|e| {
+        tracing::error!(error = %e, "Failed to fetch user config, using default");
+        crate::models::UserConfig::default()
+    });
     let tr = i18n::get_translations(&user_config.language);
 
     // 1. Detect URLs early
@@ -122,7 +125,10 @@ async fn handle_message(
 
     // Persist/Update chat info
     let is_group_context = msg.chat.is_group() || msg.chat.is_supergroup() || msg.chat.is_channel();
-    let mut chat_config = db.get_chat_config_or_default(chat_id.0).await.unwrap_or_default();
+    let mut chat_config = db.get_chat_config_or_default(chat_id.0).await.unwrap_or_else(|e| {
+        tracing::error!(error = %e, "Failed to fetch chat config, using default");
+        crate::models::ChatConfig::default()
+    });
 
     if is_group_context {
         let title = msg.chat.title().map(|s| s.to_string());
@@ -156,13 +162,13 @@ async fn handle_message(
     // Logic: In groups, only check if the group enabled the bot.
     // In private, check if the user enabled the bot.
     let is_enabled = if is_group_context {
-        chat_config.enabled
+        chat_config.is_enabled()
     } else {
-        user_config.enabled
+        user_config.is_enabled()
     };
 
     if !is_enabled {
-        tracing::debug!(is_group_context, chat_id = %chat_id, "Bot is disabled for this context");
+        tracing::info!(is_group_context, chat_id = %chat_id, "Bot is disabled for this context (skipping)");
         return Ok(())
     }
 
@@ -173,6 +179,7 @@ async fn handle_message(
 
     let custom_rules = db.get_custom_rules(user_id).await.unwrap_or_default();
     let mut cleaned_urls = Vec::new();
+
     let mut url_candidates = Vec::new();
 
     // 1. Get URLs from Telegram Entities
@@ -192,6 +199,7 @@ async fn handle_message(
                 _ => continue,
             };
             if !url_candidates.contains(&url_str) {
+                tracing::debug!(url = %url_str, "Found URL via Telegram entity");
                 url_candidates.push(url_str);
             }
         }
@@ -203,25 +211,30 @@ async fn handle_message(
         for mat in re.find_iter(text) {
             let url_str = mat.as_str().to_string();
             if !url_candidates.contains(&url_str) {
+                tracing::debug!(url = %url_str, "Found URL via Regex fallback");
                 url_candidates.push(url_str);
             }
         }
     }
 
+    if url_candidates.is_empty() {
+        tracing::debug!("No URL candidates found in message");
+        return Ok(());
+    }
+
     // 3. Process candidates
     for url_str in url_candidates {
-        tracing::debug!(url = %url_str, "Detected URL candidate");
-        
-        // 1. Expand shortened URLs first to uncover hidden trackers
+        // 1. Expand shortened URLs first
         let expanded_url = rules.expand_url(&url_str).await;
         let original_url_str = url_str.clone();
         let mut current_url = expanded_url;
 
-        // 2. Standard Sanitization
+        // 2. Sanitization
         if let Some((cleaned, provider)) = rules.sanitize(&current_url, &custom_rules, &ignored_domains) {
              current_url = cleaned;
+             tracing::info!(provider = %provider, "URL sanitized by engine");
              
-             if user_config.ai_enabled && config.ai_api_key.is_some() {
+             if user_config.is_ai_enabled() && config.ai_api_key.is_some() {
                  if let Ok(Some(ai_cleaned)) = ai.sanitize(&current_url).await {
                      current_url = ai_cleaned;
                      let provider_name = format!("AI ({})", provider);
@@ -231,14 +244,19 @@ async fn handle_message(
              }
 
              cleaned_urls.push((original_url_str, current_url, provider));
-        } else if user_config.ai_enabled && config.ai_api_key.is_some() {
-             if let Ok(Some(ai_cleaned)) = ai.sanitize(&current_url).await {
-                 cleaned_urls.push((original_url_str, ai_cleaned, "AI (Deep Scan)".to_string()));
+        } else {
+             tracing::debug!(url = %current_url, "URL was already clean");
+             if user_config.is_ai_enabled() && config.ai_api_key.is_some() {
+                 if let Ok(Some(ai_cleaned)) = ai.sanitize(&current_url).await {
+                     tracing::info!("URL sanitized by AI fallback");
+                     cleaned_urls.push((original_url_str, ai_cleaned, "AI (Deep Scan)".to_string()));
+                 }
              }
         }
     }
 
     if cleaned_urls.is_empty() {
+        tracing::info!("Processing finished: no URLs required cleaning");
         return Ok(())
     }
 

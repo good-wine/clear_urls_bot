@@ -1,5 +1,5 @@
 # --- Build Stage ---
-FROM rust:1.75-slim-bookworm as builder
+FROM rust:1.84-slim-bookworm as builder
 
 # Optimization: install dependencies separately to cache layers
 RUN apt-get update && apt-get install -y \
