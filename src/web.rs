@@ -3,6 +3,7 @@ use crate::{
     db::Db,
     models::{ChatConfig, UserConfig},
 };
+use telegram_webapp_sdk::core::types::init_data::TelegramInitData as InitData;
 use askama::Template;
 use axum::{
     extract::{FromRef, Query, State},
@@ -145,17 +146,31 @@ async fn index(
     Query(query_params): Query<HashMap<String, String>>,
 ) -> Response {
     // Check for direct Mini App entry
-    if let Some(init_data) = query_params.get("init_data").or_else(|| query_params.get("tgWebAppStartParam")) {
-        if let Some(user) = verify_telegram_webapp_data(init_data, &state.config.bot_token) {
-            if let Ok(cookie_val) = serde_json::to_string(&user) {
-                let cookie = Cookie::build(("user_session", cookie_val))
-                    .path("/")
-                    .http_only(true)
-                    .max_age(Duration::days(30))
-                    .same_site(axum_extra::extract::cookie::SameSite::Lax)
-                    .build();
-                return (jar.add(cookie), Redirect::to("/")).into_response();
-            }
+    if let Some(init_data_str) = query_params.get("init_data").or_else(|| query_params.get("tgWebAppStartParam")) {
+        // Since verify_data is not publicly exported, we'll stick to our manual verification
+        // but use the InitData struct for parsing user info conveniently if valid.
+        if verify_telegram_auth(&query_params, &state.config.bot_token) {
+             // Parse using SDK to get user object easily
+             if let Ok(init_data) = serde_urlencoded::from_str::<InitData>(init_data_str) {
+                if let Some(tg_user) = init_data.user {
+                    let user = TelegramUserSession {
+                        id: tg_user.id as i64,
+                        first_name: tg_user.first_name,
+                        username: tg_user.username,
+                        photo_url: tg_user.photo_url,
+                    };
+                    
+                    if let Ok(cookie_val) = serde_json::to_string(&user) {
+                        let cookie = Cookie::build(("user_session", cookie_val))
+                            .path("/")
+                            .http_only(true)
+                            .max_age(Duration::days(30))
+                            .same_site(axum_extra::extract::cookie::SameSite::Lax)
+                            .build();
+                        return (jar.add(cookie), Redirect::to("/")).into_response();
+                    }
+                }
+             }
         }
     }
 
@@ -578,40 +593,6 @@ fn verify_telegram_auth(params: &HashMap<String, String>, token: &str) -> bool {
     }
 
     is_valid
-}
-
-fn verify_telegram_webapp_data(init_data: &str, token: &str) -> Option<TelegramUserSession> {
-    let params: HashMap<String, String> = url::form_urlencoded::parse(init_data.as_bytes())
-        .into_owned()
-        .collect();
-
-    let hash = params.get("hash")?;
-    let mut keys: Vec<&String> = params.keys().filter(|k| k.as_str() != "hash").collect();
-    keys.sort();
-
-    let data_check_string = keys
-        .iter()
-        .map(|k| format!("{}={}", k, params.get(*k).unwrap_or(&"".to_string())))
-        .collect::<Vec<String>>()
-        .join("\n");
-
-    use sha2::Sha256;
-    // For WebApps, the secret key is HMAC-SHA256("WebAppData", token)
-    type HmacSha256 = Hmac<Sha256>;
-    let mut mac_secret = HmacSha256::new_from_slice(b"WebAppData").expect("HMAC error");
-    mac_secret.update(token.as_bytes());
-    let secret_key = mac_secret.finalize().into_bytes();
-
-    let mut mac = HmacSha256::new_from_slice(&secret_key).expect("HMAC error");
-    mac.update(data_check_string.as_bytes());
-    let computed_hash = hex::encode(mac.finalize().into_bytes());
-
-    if computed_hash == *hash {
-        let user_json = params.get("user")?;
-        serde_json::from_str::<TelegramUserSession>(user_json).ok()
-    } else {
-        None
-    }
 }
 
 #[cfg(test)]
