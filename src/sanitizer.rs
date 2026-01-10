@@ -203,7 +203,41 @@ impl RuleEngine {
              }
 
              // 3. Apply Extended Algorithm
-             if self.clean_url_in_place(&mut url) || custom_changed {
+             let mut changed = self.clean_url_in_place(&mut url);
+
+             // 4. Aggressive Fallback for common trackers not in the ruleset
+             // (e.g. Google Search gs_lcrp, oq, client, etc.)
+             if let Some(query) = url.query() {
+                 let query_pairs: Vec<(String, String)> = url.query_pairs().into_owned().collect();
+                 let mut new_query = url::form_urlencoded::Serializer::new(String::new());
+                 let mut aggressive_changed = false;
+                 let mut any_kept = false;
+
+                 let aggressive_trackers = [
+                     "gs_lcrp", "oq", "sourceid", "client", "bih", "biw", "ved", "ei", "iflsig", "adgrpid", "nw", "matchtype"
+                 ];
+
+                 for (key, value) in query_pairs {
+                     if aggressive_trackers.contains(&key.as_str()) {
+                         aggressive_changed = true;
+                         tracing::debug!(param = %key, "Aggressive tracker stripped");
+                         continue;
+                     }
+                     new_query.append_pair(&key, &value);
+                     any_kept = true;
+                 }
+
+                 if aggressive_changed {
+                     changed = true;
+                     if any_kept {
+                         url.set_query(Some(&new_query.finish()));
+                     } else {
+                         url.set_query(None);
+                     }
+                 }
+             }
+
+             if changed || custom_changed {
                  let cleaned = url.to_string();
                  tracing::info!(original = %text, cleaned = %cleaned, provider = %provider_name, "URL successfully cleaned");
                  return Some((cleaned, provider_name));

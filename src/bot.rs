@@ -1,5 +1,5 @@
 use teloxide::prelude::*;
-use teloxide::types::{ParseMode, ReplyParameters, MessageEntityKind};
+use teloxide::types::{ParseMode, ReplyParameters, MessageEntityKind, LinkPreviewOptions};
 use teloxide::utils::html;
 use regex::Regex;
 use crate::{sanitizer::RuleEngine, ai_sanitizer::AiEngine, db::Db, i18n};
@@ -36,6 +36,7 @@ async fn handle_message(
     config: crate::config::Config,
     event_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
 ) -> ResponseResult<()> {
+    tracing::info!(chat_id = %msg.chat.id, msg_id = %msg.id, "Processing incoming message");
     let chat_id = msg.chat.id;
     let user_id = msg.from.as_ref().map(|u| u.id.0 as i64).unwrap_or(0);
     tracing::Span::current().record("user_id", user_id);
@@ -326,7 +327,10 @@ async fn handle_message(
         request = request.message_thread_id(thread_id);
     }
 
-    request.await?;
+    if let Err(e) = request.await {
+        tracing::error!(chat_id = %chat_id, error = %e, "Failed to send cleaned URLs reply");
+        return Err(e);
+    }
 
     Ok(())
 }
