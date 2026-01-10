@@ -15,6 +15,7 @@ A professional, high-performance Rust-based Telegram bot that automatically remo
 
 ## 🌟 Key Features
 
+- **Smart Language Detection**: Automatically detects and responds in English or Italian based on message context and user settings.
 - **Real-Time Dashboard**: Updates stats and history instantly via **Server-Sent Events (SSE)** without page reloads.
 - **Telegram Web App Integration**: Access the full management dashboard directly inside Telegram.
 - **Modern UI/UX with Dark Mode**: Responsive design that automatically adapts to system themes (Light/Dark).

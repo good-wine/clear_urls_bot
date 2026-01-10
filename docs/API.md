@@ -4,6 +4,13 @@ The web dashboard provides a management interface and real-time statistics.
 
 ## 🔑 Authentication
 Authentication is handled via **Telegram Login Widget**. Upon successful callback, a signed cookie `user_session` is issued. 
+
+### 🛡️ Security & Verification
+The system implements strict verification according to official specifications:
+- **Field Whitelisting**: Only official fields (`id`, `first_name`, `last_name`, `username`, `photo_url`, `auth_date`) are used for hash verification to avoid interference from external query parameters.
+- **HMAC-SHA-256**: Signatures are verified using the SHA256 hash of the bot token.
+- **Freshness**: Requests older than 24 hours or with future-dated timestamps are rejected.
+
 > **Note**: In production, ensure `COOKIE_KEY` is set to a persistent secret.
 
 ## 📍 Endpoints
