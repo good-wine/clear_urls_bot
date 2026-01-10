@@ -22,7 +22,7 @@ All management routes require an active session and redirect back to `/` on comp
 - `POST /dashboard/custom_rule/delete/{id}`: Remove a custom rule.
 
 ### 📊 Data & Real-time
-- `GET /events`: SSE (Server-Sent Events) stream for real-time dashboard updates (Local/Docker only).
+- `GET /events`: SSE (Server-Sent Events) stream for real-time dashboard updates.
 - `GET /dashboard/export`: Download history as a CSV file.
 - `GET /health`: Basic health check returning `OK`.
 

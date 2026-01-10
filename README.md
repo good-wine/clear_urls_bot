@@ -1,11 +1,10 @@
 # ClearURLs Telegram Bot 🛡️
 
 [![Rust](https://img.shields.io/badge/rust-2021-orange.svg)](https://www.rust-lang.org)
-[![Vercel](https://img.shields.io/badge/deployed-vercel-black.svg)](https://vercel.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![WASM](https://img.shields.io/badge/WASM-supported-blueviolet.svg)](wasm-functions/)
 
-A professional, high-performance Rust-based Telegram bot that automatically removes tracking parameters from URLs. Featuring a modular architecture, real-time web dashboard, and serverless cloud support.
+A professional, high-performance Rust-based Telegram bot that automatically removes tracking parameters from URLs. Featuring a modular architecture and real-time web dashboard.
 
 ## 📖 Documentation
 
@@ -48,7 +47,6 @@ A professional, high-performance Rust-based Telegram bot that automatically remo
 - **Database**: sqlx::Any (SQLite/PostgreSQL) with dynamic backend detection.
 - **Real-time**: Async broadcast channels with SSE streaming.
 - **Stability**: Zero-panic core logic with comprehensive `tracing` instrumentation.
-- **Serverless**: Ready for Vercel via `@vercel/rust` with an explicit `index` binary target.
 
 ## 📝 License
 
