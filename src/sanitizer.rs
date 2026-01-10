@@ -457,10 +457,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_simple_cleaning() {
-        let engine = RuleEngine {
-            providers: Arc::new(RwLock::new(Vec::new())),
-            source_url: String::new(),
-        };
+        let engine = RuleEngine::new_lazy("");
         
         // Mock a generic provider
         {
@@ -480,5 +477,24 @@ mod tests {
         let input = "https://example.com/?utm_source=test&foo=bar";
         let (cleaned, _) = engine.sanitize(input, &[], &[]).unwrap();
         assert_eq!(cleaned, "https://example.com/?foo=bar");
+    }
+
+    #[tokio::test]
+    async fn test_redaction() {
+        let engine = RuleEngine::new_lazy("");
+        let input = "My email is test@example.com and my IP is 1.2.3.4";
+        let redacted = engine.redact_sensitive(input);
+        assert!(redacted.contains("[REDACTED EMAIL]"));
+        assert!(redacted.contains("[REDACTED IPV4]"));
+        assert!(!redacted.contains("test@example.com"));
+    }
+
+    #[tokio::test]
+    async fn test_github_cleaning() {
+        let engine = RuleEngine::new_lazy("");
+        let input = "https://github.com/owner/repo/blob/main/README.md?foo=bar#L10";
+        let (cleaned, provider) = engine.sanitize(input, &[], &[]).unwrap();
+        assert_eq!(cleaned, "https://github.com/owner/repo");
+        assert_eq!(provider, "GitHub (Repo Root)");
     }
 }
