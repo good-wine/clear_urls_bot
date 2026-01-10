@@ -109,6 +109,35 @@ impl RuleEngine {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
+    pub async fn expand_url(&self, input_url: &str) -> String {
+        let client = match reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .redirect(reqwest::redirect::Policy::limited(5))
+            .build() {
+                Ok(c) => c,
+                Err(_) => return input_url.to_string(),
+            };
+
+        // We only want to expand common shorteners or if it looks like a redirector
+        let url_lower = input_url.to_lowercase();
+        let shorteners = ["bit.ly", "tinyurl.com", "t.co", "goo.gl", "rebrand.ly", "buff.ly", "is.gd", "ow.ly", "t.me", "shorturl.at"];
+        
+        let is_shortener = shorteners.iter().any(|s| url_lower.contains(s));
+        
+        if is_shortener {
+            tracing::debug!(url = %input_url, "Attempting to expand shortened URL");
+            if let Ok(resp) = client.head(input_url).send().await {
+                let final_url = resp.url().to_string();
+                if final_url != input_url {
+                    tracing::info!(original = %input_url, expanded = %final_url, "URL expanded successfully");
+                    return final_url;
+                }
+            }
+        }
+        input_url.to_string()
+    }
+
     #[tracing::instrument(skip(self, custom_rules, ignored_domains))]
     pub fn sanitize(&self, text: &str, custom_rules: &[crate::models::CustomRule], ignored_domains: &[String]) -> Option<(String, String)> {
         tracing::debug!(url = %text, "Starting sanitization");

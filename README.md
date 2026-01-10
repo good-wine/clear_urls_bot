@@ -21,6 +21,7 @@ A professional, high-performance Rust-based Telegram bot that automatically remo
 - **Multi-Language Support**: Full i18n support for Italian and English.
 - **Granular Control**: Per-chat configuration (Reply/Delete modes) and custom tracking parameter removal.
 - **AI Deep Scan**: Optional AI-powered sanitization for complex tracking parameters not covered by standard rules.
+- **Shortlink Expansion**: Automatically follows redirects from services like bit.ly or tinyurl to uncover and strip underlying trackers.
 - **Deep Auditing**: Track which provider (Amazon, Google, etc.) cleaned each link.
 - **CSV Export**: Download your full cleaning history for personal analysis.
 - **Enterprise Ready**: Multi-stage Docker build and automatic configuration validation.

@@ -6,7 +6,7 @@ This project is designed with modularity and scalability in mind, supporting bot
 
 ### 1. Core Library (`src/lib.rs`)
 The backbone of the application. It exports all core modules:
-- `sanitizer`: The regex-based engine that processes URLs. Hardened against lock poisoning.
+- `sanitizer`: The regex-based engine that processes URLs. Hardened against lock poisoning. Includes `expand_url` to uncover hidden trackers in shortened links.
 - `ai_sanitizer`: Optional deep-scan logic using LLMs.
 - `db`: Database abstraction layer using **sqlx::Any**, supporting both **PostgreSQL** and **SQLite** dynamically.
 - `bot`: Telegram bot handler logic (Teloxide).

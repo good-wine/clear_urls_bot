@@ -210,9 +210,13 @@ async fn handle_message(
     // 3. Process candidates
     for url_str in url_candidates {
         tracing::debug!(url = %url_str, "Detected URL candidate");
+        
+        // 1. Expand shortened URLs first to uncover hidden trackers
+        let expanded_url = rules.expand_url(&url_str).await;
         let original_url_str = url_str.clone();
-        let mut current_url = url_str;
+        let mut current_url = expanded_url;
 
+        // 2. Standard Sanitization
         if let Some((cleaned, provider)) = rules.sanitize(&current_url, &custom_rules, &ignored_domains) {
              current_url = cleaned;
              
