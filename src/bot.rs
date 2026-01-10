@@ -243,9 +243,15 @@ async fn handle_message(
                  }
              }
 
+             tracing::info!(
+                 original = %rules.redact_sensitive(&original_url_str), 
+                 cleaned = %current_url, 
+                 provider = %provider, 
+                 "URL sanitized by engine"
+             );
              cleaned_urls.push((original_url_str, current_url, provider));
         } else {
-             tracing::debug!(url = %current_url, "URL was already clean");
+             tracing::debug!(url = %rules.redact_sensitive(&current_url), "URL was already clean");
              if user_config.is_ai_enabled() && config.ai_api_key.is_some() {
                  if let Ok(Some(ai_cleaned)) = ai.sanitize(&current_url).await {
                      tracing::info!("URL sanitized by AI fallback");

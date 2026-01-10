@@ -216,6 +216,14 @@ impl Db {
         Ok(rules)
     }
 
+    pub async fn clear_history(&self, user_id: i64) -> Result<()> {
+        sqlx::query("DELETE FROM cleaned_links WHERE user_id = ?")
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
     pub async fn add_custom_rule(&self, user_id: i64, pattern: &str) -> Result<()> {
         sqlx::query("INSERT INTO custom_rules (user_id, pattern) VALUES (?, ?)")
             .bind(user_id)

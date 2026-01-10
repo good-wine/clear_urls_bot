@@ -4,7 +4,18 @@ use serde::Deserialize;
 use url::Url;
 use anyhow::{Result, Context};
 use tracing::info;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, LazyLock};
+
+static SENSITIVE_PATTERNS: LazyLock<HashMap<&'static str, Regex>> = LazyLock::new(|| {
+    let mut m = HashMap::new();
+    // Use \b (word boundary) instead of look-arounds
+    m.insert("aws_access_key", Regex::new(r"(?i)\b[A-Z0-9]{20}\b").unwrap());
+    m.insert("aws_secret_key", Regex::new(r"(?i)\b[A-Za-z0-9/+=]{40}\b").unwrap());
+    m.insert("password", Regex::new(r"(?i)password\s*[:=]\s*[^\s]+").unwrap());
+    m.insert("ipv4", Regex::new(r"(?:\d{1,3}\.){3}\d{1,3}").unwrap());
+    m.insert("email", Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}").unwrap());
+    m
+});
 
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
@@ -138,9 +149,41 @@ impl RuleEngine {
         input_url.to_string()
     }
 
+    pub fn redact_sensitive(&self, text: &str) -> String {
+        let mut redacted = text.to_string();
+        for (name, re) in SENSITIVE_PATTERNS.iter() {
+            redacted = re.replace_all(&redacted, format!("[REDACTED {}]", name.to_uppercase())).to_string();
+        }
+        redacted
+    }
+
+    fn clean_github_url(&self, url: &mut Url) -> bool {
+        if let Some(host) = url.host_str() {
+            if host == "github.com" {
+                let path_segments: Vec<String> = url.path_segments()
+                    .map(|s| s.map(String::from).collect())
+                    .unwrap_or_default();
+                
+                // If it's a deep link (e.g. /owner/repo/blob/main/file.ext), truncate to /owner/repo
+                if path_segments.len() > 2 {
+                    let owner = &path_segments[0];
+                    let repo = &path_segments[1];
+                    let new_path = format!("/{}/{}", owner, repo);
+                    if url.path() != new_path {
+                        url.set_path(&new_path);
+                        url.set_query(None);
+                        url.set_fragment(None);
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
     #[tracing::instrument(skip(self, custom_rules, ignored_domains))]
     pub fn sanitize(&self, text: &str, custom_rules: &[crate::models::CustomRule], ignored_domains: &[String]) -> Option<(String, String)> {
-        tracing::debug!(url = %text, "Starting sanitization");
+        tracing::debug!(url = %self.redact_sensitive(text), "Starting sanitization");
         
         let mut url_to_parse = text.to_string();
         if !url_to_parse.contains("://") && !url_to_parse.starts_with("mailto:") {
@@ -156,6 +199,10 @@ impl RuleEngine {
              }
 
              let mut provider_name = String::from("Custom/Other");
+             let github_changed = self.clean_github_url(&mut url);
+             if github_changed {
+                 provider_name = "GitHub (Repo Root)".to_string();
+             }
              
              // 1. Apply Custom User Rules FIRST
              let mut custom_changed = false;
@@ -237,9 +284,14 @@ impl RuleEngine {
                  }
              }
 
-             if changed || custom_changed {
+             if changed || custom_changed || github_changed {
                  let cleaned = url.to_string();
-                 tracing::info!(original = %text, cleaned = %cleaned, provider = %provider_name, "URL successfully cleaned");
+                 tracing::info!(
+                     original = %self.redact_sensitive(text), 
+                     cleaned = %cleaned, 
+                     provider = %provider_name, 
+                     "URL successfully cleaned"
+                 );
                  return Some((cleaned, provider_name));
              }
         }

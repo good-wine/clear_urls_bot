@@ -33,6 +33,9 @@ async fn main() -> anyhow::Result<()> {
     let rules_refresh = rules.clone();
     let refresh_task = tokio::spawn(async move {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(86400)); // 24 ore
+        // The first tick is immediate, we skip it because we just called refresh in RuleEngine::new
+        interval.tick().await; 
+        
         loop {
             interval.tick().await;
             if let Err(e) = rules_refresh.refresh().await {

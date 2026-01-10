@@ -89,6 +89,10 @@
                 <div class="stat-value">📥</div>
                 <div class="stat-label">Export CSV</div>
             </div>
+            <div class="stat-item" style="cursor: pointer;" onclick="if(confirm('Are you sure?')) { let f = document.createElement('form'); f.method='POST'; f.action='/dashboard/history/clear'; document.body.appendChild(f); f.submit(); }" role="button" aria-label="Clear cleaning history">
+                <div class="stat-value">🗑️</div>
+                <div class="stat-label">Clear History</div>
+            </div>
             <div class="card" style="grid-column: span 1; margin-bottom: 0; padding: 1rem; min-height: 120px;">
                 <canvas id="statsChart"></canvas>
             </div>

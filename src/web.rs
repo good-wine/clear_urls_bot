@@ -79,6 +79,7 @@ pub fn create_app(state: AppState) -> Router {
         .route("/dashboard/chat/mode/{chat_id}", post(update_chat_mode))
         .route("/dashboard/custom_rule/add", post(add_custom_rule))
         .route("/dashboard/custom_rule/delete/{id}", post(delete_custom_rule))
+        .route("/dashboard/history/clear", post(clear_history))
         .route("/dashboard/export", get(export_history))
         .route("/admin", get(admin_dashboard))
         .layer(SetResponseHeaderLayer::overriding(
@@ -211,6 +212,18 @@ async fn delete_custom_rule(
                 .bind(user.id)
                 .execute(&state.db.pool)
                 .await;
+        }
+    }
+    Redirect::to("/")
+}
+
+async fn clear_history(
+    State(state): State<AppState>,
+    jar: SignedCookieJar,
+) -> impl IntoResponse {
+    if let Some(user_cookie) = jar.get("user_session") {
+        if let Ok(user) = serde_json::from_str::<TelegramUserSession>(user_cookie.value()) {
+            let _ = state.db.clear_history(user.id).await;
         }
     }
     Redirect::to("/")
