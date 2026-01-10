@@ -2,7 +2,7 @@
 <html lang="{{ config.language }}">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>{{ tr.d_title }}</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -20,82 +20,59 @@
             --shadow: 0 4px 6px rgba(0,0,0,0.05);
         }
 
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --bg: #121212;
-                --card-bg: #1e1e1e;
-                --text: #e0e0e0;
-                --text-muted: #aaaaaa;
-                --border: #333333;
-                --shadow: 0 4px 6px rgba(0,0,0,0.3);
-            }
+        body { 
+            font-family: 'Inter', system-ui, sans-serif; 
+            margin: 0; padding: 0; 
+            background-color: var(--bg); 
+            color: var(--text); 
+            transition: background 0.3s;
+            overflow-x: hidden;
+            -webkit-tap-highlight-color: transparent;
         }
-
-        body { font-family: 'Inter', system-ui, sans-serif; margin: 0; padding: 0; background-color: var(--bg); color: --text; transition: background 0.3s; }
-        header { background: var(--primary); color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; box-shadow: var(--shadow); }
-        .container { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+        
+        header { background: var(--primary); color: var(--tg-theme-button-text-color, white); padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; box-shadow: var(--shadow); }
+        .container { max-width: 1100px; margin: 1rem auto; padding: 0 1rem; }
         .card { background: var(--card-bg); padding: 1.5rem; border-radius: 16px; box-shadow: var(--shadow); margin-bottom: 1.5rem; border: 1px solid var(--border); }
         h2 { margin-top: 0; color: var(--primary); font-size: 1.2rem; display: flex; align-items: center; gap: 0.5rem; }
         
         /* Stats Styling */
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-item { background: var(--card-bg); padding: 1.2rem; border-radius: 16px; text-align: center; border: 1px solid var(--border); position: relative; overflow: hidden; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-item { background: var(--card-bg); padding: 1rem; border-radius: 16px; text-align: center; border: 1px solid var(--border); position: relative; overflow: hidden; }
         .stat-item::after { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 4px; background: var(--primary); opacity: 0.3; }
-        .stat-value { font-size: 2rem; font-weight: 800; color: var(--primary); }
-        .stat-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; }
+        .stat-value { font-size: 1.8rem; font-weight: 800; color: var(--primary); }
+        .stat-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; }
 
         /* Form Controls */
-        input, select, textarea { width: 100%; padding: 0.8rem; border: 1px solid var(--border); border-radius: 10px; background: var(--card-bg); color: var(--text); font-size: 0.95rem; }
-        button { background: var(--primary); color: white; border: none; padding: 0.8rem 1.5rem; border-radius: 10px; cursor: pointer; font-weight: 700; transition: transform 0.1s, background 0.2s; }
-        button:hover { background: var(--primary-hover); transform: translateY(-1px); }
-        button:active { transform: translateY(0); }
-
-        /* A11y: focus ring */
-        *:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
-
-        /* Toast Notifications */
-        #toast-container { position: fixed; bottom: 2rem; right: 2rem; z-index: 1000; }
-        .toast { background: var(--card-bg); border-left: 5px solid var(--primary); padding: 1rem 1.5rem; border-radius: 8px; box-shadow: 0 10px 15px rgba(0,0,0,0.1); margin-bottom: 0.5rem; animation: slideIn 0.3s ease-out; }
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-
+        input, select, textarea { width: 100%; padding: 0.8rem; border: 1px solid var(--border); border-radius: 10px; background: var(--card-bg); color: var(--text); font-size: 0.95rem; box-sizing: border-box; }
+        button { background: var(--primary); color: var(--tg-theme-button-text-color, white); border: none; padding: 0.8rem 1.5rem; border-radius: 10px; cursor: pointer; font-weight: 700; transition: transform 0.1s, background 0.2s; }
+        
         .history-table { width: 100%; border-collapse: collapse; }
         .history-table th { text-align: left; padding: 1rem; color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; border-bottom: 1px solid var(--border); }
         .history-table td { padding: 1rem; border-bottom: 1px solid var(--border); }
         .url-text { font-family: monospace; font-size: 0.85rem; word-break: break-all; }
+
+        .web-only { display: block; }
+        .tg-only { display: none; }
+
+        #toast-container { position: fixed; bottom: 5rem; left: 50%; transform: translateX(-50%); z-index: 1000; width: 80%; }
+        .toast { background: var(--card-bg); border-left: 5px solid var(--primary); color: var(--text); padding: 0.8rem 1.2rem; border-radius: 8px; box-shadow: 0 10px 15px rgba(0,0,0,0.2); margin-bottom: 0.5rem; font-size: 0.9rem; }
     </style>
 </head>
 <body>
-    <header role="banner">
-        <div style="font-weight: 900; font-size: 1.5rem; letter-spacing: -0.5px;">🛡️ ClearURLs <span style="font-weight: 300; opacity: 0.8;">PRO</span></div>
+    <header role="banner" class="web-only">
+        <div style="font-weight: 900; font-size: 1.5rem; letter-spacing: -0.5px;">🛡️ ClearURLs</div>
         <nav style="display: flex; align-items: center; gap: 1.5rem;">
             {% if user.id == admin_id %}
-                <a href="/admin" class="logout-btn" style="border-color: #ff9800; color: #ff9800;">ADMIN</a>
+                <a href="/admin" style="color: #ff9800; font-weight: bold; text-decoration: none;">ADMIN</a>
             {% endif %}
-            <span aria-label="User profile" class="web-only">{{ user.first_name }}</span>
-            <a href="/logout" class="logout-btn web-only" aria-label="Logout">Logout</a>
-            <button onclick="window.Telegram.WebApp.close()" class="tg-only" style="padding: 0.4rem 1rem; font-size: 0.8rem;">Close</button>
+            <span>{{ user.first_name }}</span>
+            <a href="/logout" style="color: white; text-decoration: none; opacity: 0.8;">Logout</a>
         </nav>
     </header>
 
-    <script>
-        // Initialize Telegram Mini App
-        const tg = window.Telegram.WebApp;
-        tg.ready();
-        tg.expand();
-
-        // Toggle UI elements based on environment
-        if (tg.initData) {
-            document.querySelectorAll('.web-only').forEach(el => el.style.display = 'none');
-            document.querySelectorAll('.tg-only').forEach(el => el.style.display = 'block');
-        } else {
-            document.querySelectorAll('.web-only').forEach(el => el.style.display = 'block');
-            document.querySelectorAll('.tg-only').forEach(el => el.style.display = 'none');
-        }
-    </script>
-
     <main class="container" role="main">
         <div class="stats-grid">
-            <div class="stat-item" aria-live="polite">
+            <div class="stat-item">
                 <div class="stat-value" id="count-total">{{ config.cleaned_count }}</div>
                 <div class="stat-label">{{ tr.d_links_cleaned }}</div>
             </div>
@@ -103,104 +80,74 @@
                 <div class="stat-value">{{ chats.len() }}</div>
                 <div class="stat-label">{{ tr.d_active_chats }}</div>
             </div>
-            <div class="stat-item" style="cursor: pointer;" onclick="location.href='/dashboard/export'" role="button" aria-label="Export history to CSV">
+            <div class="stat-item" style="cursor: pointer;" onclick="location.href='/dashboard/export'">
                 <div class="stat-value">📥</div>
-                <div class="stat-label">Export CSV</div>
+                <div class="stat-label">Export</div>
             </div>
-            <div class="stat-item" style="cursor: pointer;" onclick="if(confirm('Are you sure?')) { let f = document.createElement('form'); f.method='POST'; f.action='/dashboard/history/clear'; document.body.appendChild(f); f.submit(); }" role="button" aria-label="Clear cleaning history">
-                <div class="stat-value">🗑️</div>
-                <div class="stat-label">Clear History</div>
-            </div>
-            <div class="card" style="grid-column: span 1; margin-bottom: 0; padding: 1rem; min-height: 120px;">
+            <div class="card" style="margin-bottom: 0; padding: 0.5rem; min-height: 80px;">
                 <canvas id="statsChart"></canvas>
             </div>
         </div>
 
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem;">
-            <section class="card" aria-labelledby="settings-title">
-                <h2 id="settings-title">⚙️ {{ tr.d_global_settings }}</h2>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem;">
+            <section class="card">
+                <h2>⚙️ {{ tr.d_global_settings }}</h2>
                 <form action="/dashboard/update" method="POST" id="config-form">
-                    <div class="form-group" style="display: flex; align-items: center; gap: 0.7rem; margin-bottom: 0.5rem;">
+                    <div style="display: flex; align-items: center; gap: 0.7rem; margin-bottom: 1rem;">
                         <input type="checkbox" id="enabled" name="enabled" {% if config.is_enabled() %}checked{% endif %} style="width: auto;">
-                        <label for="enabled" style="margin:0;">{{ tr.d_enable_bot }}</label>
+                        <label for="enabled">{{ tr.d_enable_bot }}</label>
                     </div>
-                    <div class="form-group" style="display: flex; align-items: center; gap: 0.7rem; margin-bottom: 1.5rem;">
+                    <div style="display: flex; align-items: center; gap: 0.7rem; margin-bottom: 1.5rem;">
                         <input type="checkbox" id="ai_enabled" name="ai_enabled" {% if config.is_ai_enabled() %}checked{% endif %} style="width: auto;">
-                        <label for="ai_enabled" style="margin:0;">{{ tr.d_enable_ai }}</label>
+                        <label for="ai_enabled">{{ tr.d_enable_ai }}</label>
                     </div>
-                    <div class="form-group">
-                        <label for="mode-select">{{ tr.d_action_mode }}</label>
-                        <select name="mode" id="mode-select">
+                    <div style="margin-bottom: 1rem;">
+                        <label>{{ tr.d_action_mode }}</label>
+                        <select name="mode">
                             <option value="reply" {% if config.mode == "reply" %}selected{% endif %}>{{ tr.d_mode_reply }}</option>
                             <option value="delete" {% if config.mode == "delete" %}selected{% endif %}>{{ tr.d_mode_delete }}</option>
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label for="lang-select">Language / Lingua</label>
-                        <select name="language" id="lang-select">
+                    <div style="margin-bottom: 1.5rem;">
+                        <label>Language</label>
+                        <select name="language">
                             <option value="en" {% if config.language == "en" %}selected{% endif %}>English</option>
                             <option value="it" {% if config.language == "it" %}selected{% endif %}>Italiano</option>
                         </select>
                     </div>
-                    <button type="submit">{{ tr.d_save }}</button>
+                    <button type="submit" class="web-only">{{ tr.d_save }}</button>
                 </form>
             </section>
 
-            <section class="card" aria-labelledby="chats-title">
-                <h2 id="chats-title">💬 {{ tr.d_managed_chats }}</h2>
+            <section class="card">
+                <h2>💬 {{ tr.d_managed_chats }}</h2>
                 {% if chats.is_empty() %}
-                    <p style="color: var(--text-muted); text-align: center; padding: 2rem;">{{ tr.d_no_chats }}</p>
+                    <p style="color: var(--text-muted); text-align: center;">{{ tr.d_no_chats }}</p>
                 {% else %}
-                    <div class="chat-list">
                     {% for chat in chats %}
-                        <div class="chat-item">
-                            <div class="chat-header">
-                                <span style="font-weight: 700;">
-                                    {% match chat.title %}
-                                        {% when Some with (val) %}{{ val }}
-                                        {% when None %}Private Chat
-                                    {% endmatch %}
-                                </span>
-                                <form action="/dashboard/chat/toggle/{{ chat.chat_id }}" method="POST">
-                                    <button type="submit" style="background: {% if chat.is_enabled() %}var(--success){% else %}var(--danger){% endif %}; padding: 0.3rem 0.7rem; font-size: 0.7rem; border-radius: 20px;">
-                                        {% if chat.is_enabled() %}ACTIVE{% else %}PAUSED{% endif %}
-                                    </button>
-                                </form>
-                            </div>
-                            <form action="/dashboard/chat/mode/{{ chat.chat_id }}" method="POST">
-                                <select name="mode" style="padding: 0.4rem; font-size: 0.8rem; border-radius: 8px;" onchange="this.form.submit()">
-                                    <option value="default" {% if chat.mode == "default" %}selected{% endif %}>Global Settings</option>
-                                    <option value="reply" {% if chat.mode == "reply" %}selected{% endif %}>Reply Only</option>
-                                    <option value="delete" {% if chat.mode == "delete" %}selected{% endif %}>Delete & Repost</option>
-                                </select>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+                            <span style="font-weight: 600;">{{ chat.title.clone().unwrap_or("Private".to_string()) }}</span>
+                            <form action="/dashboard/chat/toggle/{{ chat.chat_id }}" method="POST">
+                                <button type="submit" style="background: {% if chat.is_enabled() %}var(--success){% else %}var(--danger){% endif %}; padding: 0.3rem 0.6rem; font-size: 0.7rem;">
+                                    {% if chat.is_enabled() %}ON{% else %}OFF{% endif %}
+                                </button>
                             </form>
                         </div>
                     {% endfor %}
-                    </div>
                 {% endif %}
             </section>
         </div>
 
-        <section class="card" style="margin-top: 1.5rem;" aria-labelledby="history-title">
-            <h2 id="history-title">🕒 {{ tr.d_history }}</h2>
+        <section class="card">
+            <h2>🕒 {{ tr.d_history }}</h2>
             <div style="overflow-x: auto;">
                 <table class="history-table">
-                    <thead>
-                        <tr>
-                            <th>URL Originale</th>
-                            <th>Pulito</th>
-                            <th>Provider</th>
-                        </tr>
-                    </thead>
                     <tbody id="history-body">
                         {% for link in history %}
                         <tr>
-                            <td class="url-text" style="color: var(--danger); opacity: 0.8;">{{ link.original_url }}</td>
-                            <td class="url-text" style="color: var(--success); font-weight: 600;">{{ link.cleaned_url }}</td>
-                            <td>
-                                <span class="badge badge-green" style="background: var(--primary); color: white; opacity: 0.9;">
-                                    {% if let Some(provider) = link.provider_name %}{{ provider }}{% else %}Unknown{% endif %}
-                                </span>
+                            <td class="url-text">
+                                <div style="color: var(--danger); opacity: 0.6; font-size: 0.7rem; margin-bottom: 0.2rem;">{{ link.original_url }}</div>
+                                <div style="color: var(--success); font-weight: 600;">{{ link.cleaned_url }}</div>
                             </td>
                         </tr>
                         {% endfor %}
@@ -210,30 +157,59 @@
         </section>
     </main>
 
-    <div id="toast-container" aria-live="assertive"></div>
+    <div id="toast-container"></div>
 
     <script>
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+
+        // Theme sync
+        document.body.style.backgroundColor = 'var(--tg-theme-bg-color)';
+
+        // Mini App logic
+        if (tg.initData) {
+            document.querySelectorAll('.web-only').forEach(el => el.style.display = 'none');
+            
+            // Back Button
+            tg.BackButton.show();
+            tg.BackButton.onClick(() => tg.close());
+
+            // Main Button
+            const mainButton = tg.MainButton;
+            mainButton.setText("{{ tr.d_save }}");
+            mainButton.onClick(() => {
+                tg.HapticFeedback.notificationOccurred('success');
+                document.getElementById('config-form').submit();
+            });
+
+            document.getElementById('config-form').addEventListener('change', () => {
+                mainButton.show();
+                tg.HapticFeedback.impactOccurred('medium');
+            });
+        }
+
         function showToast(message) {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
             toast.className = 'toast';
             toast.innerText = message;
             container.appendChild(toast);
+            if (tg.initData) tg.HapticFeedback.notificationOccurred('warning');
             setTimeout(() => toast.remove(), 3000);
         }
 
         // Initialize Chart
         const ctx = document.getElementById('statsChart').getContext('2d');
-        window.chart = new Chart(ctx, {
+        new Chart(ctx, {
             type: 'line',
             data: {
                 labels: [{% for stat in stats_by_day %}'{{ stat.0 }}',{% endfor %}],
                 datasets: [{
                     data: [{% for stat in stats_by_day %}{{ stat.1 }},{% endfor %}],
-                    borderColor: '#0088cc',
-                    backgroundColor: 'rgba(0, 136, 204, 0.1)',
+                    borderColor: '{{ tr.d_links_cleaned }}' == 'Link Puliti' ? '#4caf50' : '#0088cc',
                     tension: 0.4,
-                    fill: true,
+                    fill: false,
                     pointRadius: 0
                 }]
             },
@@ -241,33 +217,17 @@
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: { legend: { display: false } },
-                scales: { 
-                    y: { display: false },
-                    x: { grid: { display: false }, ticks: { color: '#888', font: { size: 10 } } }
-                }
+                scales: { y: { display: false }, x: { display: false } }
             }
         });
 
-        // SSE Real-time Updates
+        // SSE
         const eventSource = new EventSource('/events');
         eventSource.onmessage = (event) => {
             const data = JSON.parse(event.data);
-            showToast("✨ New link cleaned!");
-            
-            // Update stats
+            showToast("✨ Cleaned!");
             const countEl = document.getElementById('count-total');
             if (countEl) countEl.innerText = parseInt(countEl.innerText) + 1;
-
-            // Table update
-            const tbody = document.getElementById('history-body');
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td class="url-text" style="color: var(--danger); opacity: 0.8;">${data.original_url}</td>
-                <td class="url-text" style="color: var(--success); font-weight: 600;">${data.cleaned_url}</td>
-                <td><span class="badge badge-green" style="background: var(--primary); color: white; opacity: 0.9;">${data.provider_name}</span></td>
-            `;
-            tbody.insertBefore(row, tbody.firstChild);
-            if (tbody.children.length > 10) tbody.removeChild(tbody.lastChild);
         };
     </script>
 </body>
