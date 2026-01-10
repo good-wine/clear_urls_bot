@@ -22,7 +22,10 @@ impl Config {
         dotenv().ok();
 
         let bot_token = env::var("TELOXIDE_TOKEN").expect("TELOXIDE_TOKEN must be set");
-        let bot_username = env::var("BOT_USERNAME").expect("BOT_USERNAME must be set");
+        let mut bot_username = env::var("BOT_USERNAME").expect("BOT_USERNAME must be set");
+        if bot_username.starts_with('@') {
+            bot_username = bot_username[1..].to_string();
+        }
         let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:bot.db".to_string());
         let port = env::var("PORT").unwrap_or_else(|_| "3000".to_string());
         let server_addr = env::var("SERVER_ADDR").unwrap_or_else(|_| format!("0.0.0.0:{}", port));

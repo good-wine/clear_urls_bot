@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: clear-urls-bot
+    env: docker
+    dockerCommand: clear_urls_bot
+    plan: free
+    region: frankfurt
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: RUST_LOG
+        value: clear_urls_bot=info,teloxide=info,axum=info
+      - key: DATABASE_URL
+        value: sqlite:/etc/clearurls/bot.db?mode=rwc
+      - key: TELOXIDE_TOKEN
+        sync: false
+      - key: BOT_USERNAME
+        sync: false
+      - key: DASHBOARD_URL
+        sync: false
+      - key: ADMIN_ID
+        sync: false
+      - key: COOKIE_KEY
+        generateValue: true
+    disk:
+      name: clearurls-data
+      mountPath: /etc/clearurls
+      sizeGB: 1
+    healthCheckPath: /health

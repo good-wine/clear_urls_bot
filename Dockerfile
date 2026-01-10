@@ -35,10 +35,6 @@ RUN touch bot.db && chown clearurls:clearurls bot.db && chown -R clearurls:clear
 
 USER clearurls
 
-# Healthcheck: ensure the web server is responding
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3000/health || exit 1
-
 EXPOSE 3000
 
 ENV APP_ENV=production

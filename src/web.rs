@@ -107,7 +107,7 @@ pub async fn run_server(
             // If the key is too short, we derive a 64-byte key using SHA-512
             use sha2::{Sha512, Digest};
             let hash = Sha512::digest(k.as_bytes());
-            Key::from(&hash)
+            Key::from(&hash[..])
         } else {
             Key::from(k.as_bytes())
         }
