@@ -283,12 +283,27 @@ async fn handle_message(
         response.push('\n');
     }
 
+    const MAX_MESSAGE_LENGTH: usize = 4000; // Leave a buffer for Telegram's 4096 limit
+
     if cleaned_urls.len() == 1 {
-        let clean = &cleaned_urls[0].1;
-        response.push_str(&format!("<a href=\"{}\">{}</a>", html::escape(clean), html::escape(clean)));
+        let clean = cleaned_urls[0].1.trim();
+        let escaped_url = html::escape(clean);
+        let link_entry = format!("<a href=\"{}\">{}</a>", escaped_url, escaped_url);
+        
+        if response.len() + link_entry.len() < MAX_MESSAGE_LENGTH {
+            response.push_str(&link_entry);
+        }
     } else {
         for (_, cleaned, _) in &cleaned_urls {
-            response.push_str(&format!("• <a href=\"{}\">{}</a>\n", html::escape(cleaned), html::escape(cleaned)));
+            let clean = cleaned.trim();
+            let escaped_url = html::escape(clean);
+            let link_entry = format!("• <a href=\"{}\">{}</a>\n", escaped_url, escaped_url);
+            
+            if response.len() + link_entry.len() > MAX_MESSAGE_LENGTH {
+                response.push_str("... (truncated)");
+                break;
+            }
+            response.push_str(&link_entry);
         }
     }
     
