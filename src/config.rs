@@ -24,7 +24,8 @@ impl Config {
         let bot_token = env::var("TELOXIDE_TOKEN").expect("TELOXIDE_TOKEN must be set");
         let bot_username = env::var("BOT_USERNAME").expect("BOT_USERNAME must be set");
         let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:bot.db".to_string());
-        let server_addr = env::var("SERVER_ADDR").unwrap_or_else(|_| "127.0.0.1:3000".to_string());
+        let port = env::var("PORT").unwrap_or_else(|_| "3000".to_string());
+        let server_addr = env::var("SERVER_ADDR").unwrap_or_else(|_| format!("0.0.0.0:{}", port));
         let dashboard_url_str = env::var("DASHBOARD_URL").unwrap_or_else(|_| "http://127.0.0.1:3000".to_string());
         let dashboard_url = Url::parse(&dashboard_url_str).expect("DASHBOARD_URL must be a valid URL");
         let admin_id = env::var("ADMIN_ID").unwrap_or_else(|_| "0".to_string()).parse().unwrap_or(0);
