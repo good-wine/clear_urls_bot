@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [1.1.0] - 2026-01-10
 
 ### Added
+- **Smart Language Detection**: Automatically detects the language of incoming messages (English/Italian) and replies in the corresponding language.
 - **Supabase Integration**: Compatibility with Supabase PostgreSQL for persistent cloud storage.
 - **WASM URL Cleaner**: High-performance Rust-compiled WebAssembly module for client-side sanitization.
 - **Advanced Observability**: Robust logging system using `tracing` with JSON output support for production and colored pretty-logs for development.

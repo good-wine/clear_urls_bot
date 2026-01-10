@@ -1,19 +1,19 @@
-use teloxide::prelude::*;
-use teloxide::types::{ParseMode, ReplyParameters, MessageEntityKind};
-use teloxide::utils::html;
+use crate::{ai_sanitizer::AiEngine, db::Db, i18n, sanitizer::RuleEngine};
 use regex::Regex;
-use crate::{sanitizer::RuleEngine, ai_sanitizer::AiEngine, db::Db, i18n};
+use teloxide::prelude::*;
+use teloxide::types::{MessageEntityKind, ParseMode, ReplyParameters};
+use teloxide::utils::html;
+use whatlang::{detect, Lang};
 
 pub async fn run_bot(
-    bot: Bot, 
-    db: Db, 
-    rules: RuleEngine, 
+    bot: Bot,
+    db: Db,
+    rules: RuleEngine,
     ai: AiEngine,
     config: crate::config::Config,
     event_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
 ) {
-    let handler = Update::filter_message()
-        .endpoint(handle_message);
+    let handler = Update::filter_message().endpoint(handle_message);
 
     Dispatcher::builder(bot, handler)
         .dependencies(dptree::deps![db, rules, ai, config, event_tx])
@@ -40,12 +40,11 @@ async fn handle_message(
     let chat_id = msg.chat.id;
     let user_id = msg.from.as_ref().map(|u| u.id.0 as i64).unwrap_or(0);
     tracing::Span::current().record("user_id", user_id);
-    
+
     let user_config = db.get_user_config(user_id).await.unwrap_or_else(|e| {
         tracing::error!(error = %e, "Failed to fetch user config, using default");
         crate::models::UserConfig::default()
     });
-    let tr = i18n::get_translations(&user_config.language);
 
     // 1. Detect URLs early
     let (text, entities) = if let Some(t) = msg.text() {
@@ -53,12 +52,39 @@ async fn handle_message(
     } else if let Some(c) = msg.caption() {
         (c, msg.caption_entities())
     } else {
-        ( "", None )
+        ("", None)
     };
 
-    let mut has_urls = entities.as_ref().map(|e| e.iter().any(|entity| {
-        matches!(entity.kind, MessageEntityKind::Url | MessageEntityKind::TextLink { .. })
-    })).unwrap_or(false);
+    // Detect language
+    let detected_lang = if !text.is_empty() {
+        detect(text).map(|info| info.lang())
+    } else {
+        None
+    };
+
+    let telegram_lang = msg.from.as_ref().and_then(|u| u.language_code.as_deref());
+
+    let lang_code = match (detected_lang, telegram_lang) {
+        (Some(Lang::Ita), _) => "it",
+        (Some(Lang::Eng), _) => "en",
+        (_, Some(l)) if l.starts_with("it") => "it",
+        (_, Some(l)) if l.starts_with("en") => "en",
+        _ => &user_config.language,
+    };
+
+    let tr = i18n::get_translations(lang_code);
+
+    let mut has_urls = entities
+        .as_ref()
+        .map(|e| {
+            e.iter().any(|entity| {
+                matches!(
+                    entity.kind,
+                    MessageEntityKind::Url | MessageEntityKind::TextLink { .. }
+                )
+            })
+        })
+        .unwrap_or(false);
 
     // Manual fallback detection for schemeless URLs or cases where Telegram detection fails
     if !has_urls {
@@ -79,7 +105,7 @@ async fn handle_message(
             let cmd = cmd_parts[0];
             let is_private = msg.chat.is_private();
             let bot_username = config.bot_username.to_lowercase();
-            
+
             let is_targeted = if cmd_parts.len() > 1 {
                 cmd_parts[1].to_lowercase().starts_with(&bot_username)
             } else {
@@ -96,9 +122,11 @@ async fn handle_message(
                                 config.dashboard_url.clone(),
                             )],
                             vec![teloxide::types::InlineKeyboardButton::web_app(
-                                "📱 Open Web App",
-                                teloxide::types::WebAppInfo { url: config.dashboard_url.clone() },
-                            )]
+                                tr.open_web_app,
+                                teloxide::types::WebAppInfo {
+                                    url: config.dashboard_url.clone(),
+                                },
+                            )],
                         ]);
 
                         let welcome_text = tr.welcome.replace("{}", &user_id.to_string());
@@ -106,16 +134,22 @@ async fn handle_message(
                             .parse_mode(ParseMode::Html)
                             .reply_markup(keyboard)
                             .await?;
-                        return Ok(())
+                        return Ok(());
                     }
                     "/help" => {
-                        bot.send_message(chat_id, tr.help_text).parse_mode(ParseMode::Html).await?;
-                        return Ok(())
+                        bot.send_message(chat_id, tr.help_text)
+                            .parse_mode(ParseMode::Html)
+                            .await?;
+                        return Ok(());
                     }
                     "/stats" => {
-                        let stats_text = tr.stats_text.replace("{}", &user_config.cleaned_count.to_string());
-                        bot.send_message(chat_id, stats_text).parse_mode(ParseMode::Html).await?;
-                        return Ok(())
+                        let stats_text = tr
+                            .stats_text
+                            .replace("{}", &user_config.cleaned_count.to_string());
+                        bot.send_message(chat_id, stats_text)
+                            .parse_mode(ParseMode::Html)
+                            .await?;
+                        return Ok(());
                     }
                     _ => {}
                 }
@@ -125,16 +159,19 @@ async fn handle_message(
 
     // Persist/Update chat info
     let is_group_context = msg.chat.is_group() || msg.chat.is_supergroup() || msg.chat.is_channel();
-    let mut chat_config = db.get_chat_config_or_default(chat_id.0).await.unwrap_or_else(|e| {
-        tracing::error!(error = %e, "Failed to fetch chat config, using default");
-        crate::models::ChatConfig::default()
-    });
+    let mut chat_config = db
+        .get_chat_config_or_default(chat_id.0)
+        .await
+        .unwrap_or_else(|e| {
+            tracing::error!(error = %e, "Failed to fetch chat config, using default");
+            crate::models::ChatConfig::default()
+        });
 
     if is_group_context {
         let title = msg.chat.title().map(|s| s.to_string());
         let chat_config_db = db.get_chat_config(chat_id.0).await.unwrap_or(None);
         let chat_exists = chat_config_db.is_some();
-        
+
         // Only save if it's new or title changed
         if !chat_exists || chat_config.title != title {
             chat_config.title = title.clone();
@@ -145,11 +182,12 @@ async fn handle_message(
         }
 
         if !chat_exists && user_id != 0 && has_urls {
-            let notify_text = format!(
-                "🛡️ <b>ClearURLs attivato!</b>\n\nHo iniziato a proteggere il gruppo: <b>{}</b>\n\nPuoi disattivarlo o cambiare modalità dal tuo dashboard.",
-                html::escape(&title.unwrap_or_else(|| "Sconosciuto".to_string()))
+            let notify_text = tr.group_activated.replace(
+                "{}",
+                &html::escape(&title.unwrap_or_else(|| tr.unknown.to_string())),
             );
-            let _ = bot.send_message(ChatId(user_id), notify_text)
+            let _ = bot
+                .send_message(ChatId(user_id), notify_text)
                 .parse_mode(ParseMode::Html)
                 .await;
         }
@@ -169,10 +207,12 @@ async fn handle_message(
 
     if !is_enabled {
         tracing::info!(is_group_context, chat_id = %chat_id, "Bot is disabled for this context (skipping)");
-        return Ok(())
+        return Ok(());
     }
 
-    let ignored_domains: Vec<String> = user_config.ignored_domains.split(',')
+    let ignored_domains: Vec<String> = user_config
+        .ignored_domains
+        .split(',')
         .map(|s| s.trim().to_lowercase())
         .filter(|s| !s.is_empty())
         .collect();
@@ -190,12 +230,12 @@ async fn handle_message(
                 MessageEntityKind::Url => {
                     let start = entity.offset;
                     let end = start + entity.length;
-                    if end > utf16.len() { continue; }
+                    if end > utf16.len() {
+                        continue;
+                    }
                     String::from_utf16_lossy(&utf16[start..end])
-                },
-                MessageEntityKind::TextLink { url } => {
-                    url.to_string()
-                },
+                }
+                MessageEntityKind::TextLink { url } => url.to_string(),
                 _ => continue,
             };
             if !url_candidates.contains(&url_str) {
@@ -230,46 +270,50 @@ async fn handle_message(
         let mut current_url = expanded_url;
 
         // 2. Sanitization
-        if let Some((cleaned, provider)) = rules.sanitize(&current_url, &custom_rules, &ignored_domains) {
-             current_url = cleaned;
-             tracing::info!(provider = %provider, "URL sanitized by engine");
-             
-             if user_config.is_ai_enabled() && config.ai_api_key.is_some() {
-                 if let Ok(Some(ai_cleaned)) = ai.sanitize(&current_url).await {
-                     current_url = ai_cleaned;
-                     let provider_name = format!("AI ({})", provider);
-                     cleaned_urls.push((original_url_str, current_url, provider_name));
-                     continue;
-                 }
-             }
+        if let Some((cleaned, provider)) =
+            rules.sanitize(&current_url, &custom_rules, &ignored_domains)
+        {
+            current_url = cleaned;
+            tracing::info!(provider = %provider, "URL sanitized by engine");
 
-             tracing::info!(
-                 original = %rules.redact_sensitive(&original_url_str), 
-                 cleaned = %current_url, 
-                 provider = %provider, 
-                 "URL sanitized by engine"
-             );
-             cleaned_urls.push((original_url_str, current_url, provider));
+            if user_config.is_ai_enabled() && config.ai_api_key.is_some() {
+                if let Ok(Some(ai_cleaned)) = ai.sanitize(&current_url).await {
+                    current_url = ai_cleaned;
+                    let provider_name = format!("AI ({})", provider);
+                    cleaned_urls.push((original_url_str, current_url, provider_name));
+                    continue;
+                }
+            }
+
+            tracing::info!(
+                original = %rules.redact_sensitive(&original_url_str),
+                cleaned = %current_url,
+                provider = %provider,
+                "URL sanitized by engine"
+            );
+            cleaned_urls.push((original_url_str, current_url, provider));
         } else {
-             tracing::debug!(url = %rules.redact_sensitive(&current_url), "URL was already clean");
-             if user_config.is_ai_enabled() && config.ai_api_key.is_some() {
-                 if let Ok(Some(ai_cleaned)) = ai.sanitize(&current_url).await {
-                     tracing::info!("URL sanitized by AI fallback");
-                     cleaned_urls.push((original_url_str, ai_cleaned, "AI (Deep Scan)".to_string()));
-                 }
-             }
+            tracing::debug!(url = %rules.redact_sensitive(&current_url), "URL was already clean");
+            if user_config.is_ai_enabled() && config.ai_api_key.is_some() {
+                if let Ok(Some(ai_cleaned)) = ai.sanitize(&current_url).await {
+                    tracing::info!("URL sanitized by AI fallback");
+                    cleaned_urls.push((original_url_str, ai_cleaned, "AI (Deep Scan)".to_string()));
+                }
+            }
         }
     }
 
     if cleaned_urls.is_empty() {
         tracing::info!("Processing finished: no URLs required cleaning");
-        return Ok(())
+        return Ok(());
     }
 
-    let _ = db.increment_cleaned_count(user_id, cleaned_urls.len() as i64).await;
+    let _ = db
+        .increment_cleaned_count(user_id, cleaned_urls.len() as i64)
+        .await;
     for (orig, clean, prov) in &cleaned_urls {
         let _ = db.log_cleaned_link(user_id, orig, clean, prov).await;
-        
+
         let _ = event_tx.send(serde_json::json!({
             "user_id": user_id,
             "original_url": orig,
@@ -288,17 +332,31 @@ async fn handle_message(
     };
 
     if mode == "delete" && bot.delete_message(chat_id, msg.id).await.is_ok() {
-        let user_name = msg.from.as_ref().map(|u| u.first_name.clone()).unwrap_or_else(|| "User".into());
+        let user_name = msg
+            .from
+            .as_ref()
+            .map(|u| u.first_name.clone())
+            .unwrap_or_else(|| "User".into());
         let mut response = tr.cleaned_for.replace("{}", &html::escape(&user_name));
         for (_, cleaned, _) in &cleaned_urls {
-            response.push_str(&format!("• <a href=\"{}\">{}</a>\n", html::escape(cleaned), html::escape(cleaned)));
+            response.push_str(&format!(
+                "• <a href=\"{}\">{}</a>\n",
+                html::escape(cleaned),
+                html::escape(cleaned)
+            ));
         }
-        bot.send_message(chat_id, response).parse_mode(ParseMode::Html).await?;
-        return Ok(())
+        bot.send_message(chat_id, response)
+            .parse_mode(ParseMode::Html)
+            .await?;
+        return Ok(());
     }
 
     let mut response = if is_group_context {
-        let user_name = msg.from.as_ref().map(|u| u.first_name.clone()).unwrap_or_else(|| "User".into());
+        let user_name = msg
+            .from
+            .as_ref()
+            .map(|u| u.first_name.clone())
+            .unwrap_or_else(|| "User".into());
         tr.cleaned_for.replace("{}", &html::escape(&user_name))
     } else {
         String::from(tr.cleaned_links)
@@ -314,7 +372,7 @@ async fn handle_message(
         let clean = cleaned_urls[0].1.trim();
         let escaped_url = html::escape(clean);
         let link_entry = format!("<a href=\"{}\">{}</a>", escaped_url, escaped_url);
-        
+
         if response.len() + link_entry.len() < MAX_MESSAGE_LENGTH {
             response.push_str(&link_entry);
         }
@@ -323,7 +381,7 @@ async fn handle_message(
             let clean = cleaned.trim();
             let escaped_url = html::escape(clean);
             let link_entry = format!("• <a href=\"{}\">{}</a>\n", escaped_url, escaped_url);
-            
+
             if response.len() + link_entry.len() > MAX_MESSAGE_LENGTH {
                 response.push_str("... (truncated)");
                 break;
@@ -331,11 +389,12 @@ async fn handle_message(
             response.push_str(&link_entry);
         }
     }
-    
+
     tracing::info!(chat_id = %chat_id, "Sending cleaned URLs reply");
-    
+
     use teloxide::types::LinkPreviewOptions;
-    let mut request = bot.send_message(chat_id, response)
+    let mut request = bot
+        .send_message(chat_id, response)
         .reply_parameters(ReplyParameters::new(msg.id))
         .parse_mode(ParseMode::Html)
         .link_preview_options(LinkPreviewOptions {

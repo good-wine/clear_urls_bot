@@ -21,6 +21,10 @@ pub struct Translations {
     pub d_no_chats: &'static str,
     pub d_links_cleaned: &'static str,
     pub d_active_chats: &'static str,
+    // New strings
+    pub group_activated: &'static str,
+    pub unknown: &'static str,
+    pub open_web_app: &'static str,
 }
 
 pub fn get_translations(lang: &str) -> Translations {
@@ -46,6 +50,9 @@ pub fn get_translations(lang: &str) -> Translations {
             d_no_chats: "Nessuna chat trovata.",
             d_links_cleaned: "Link Puliti",
             d_active_chats: "Chat Attive",
+            group_activated: "🛡️ <b>ClearURLs attivato!</b>\n\nHo iniziato a proteggere il gruppo: <b>{}</b>\n\nPuoi disattivarlo o cambiare modalità dal tuo dashboard.",
+            unknown: "Sconosciuto",
+            open_web_app: "📱 Apri Web App",
         },
         _ => Translations {
             welcome: "<b>Welcome to ClearURLs Manager!</b>\n\nYour User ID is: <code>{}</code>\n\nYou can configure the bot and manage your cleaned links directly from the secure web dashboard.",
@@ -68,6 +75,9 @@ pub fn get_translations(lang: &str) -> Translations {
             d_no_chats: "No chats found.",
             d_links_cleaned: "Links Cleaned",
             d_active_chats: "Active Chats",
+            group_activated: "🛡️ <b>ClearURLs activated!</b>\n\nI have started protecting the group: <b>{}</b>\n\nYou can disable it or change settings from your dashboard.",
+            unknown: "Unknown",
+            open_web_app: "📱 Open Web App",
         },
     }
 }
