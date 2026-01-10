@@ -57,5 +57,13 @@ impl Config {
         if self.bot_username.is_empty() {
             panic!("FATAL: BOT_USERNAME deve essere configurato");
         }
+
+        // Render Reserved Ports check
+        let reserved_ports = ["18012", "18013", "19099"];
+        for port in reserved_ports {
+            if self.server_addr.contains(port) {
+                panic!("FATAL: Port {} is reserved by Render and cannot be used.", port);
+            }
+        }
     }
 }
