@@ -44,13 +44,26 @@ async fn handle_message(
     let user_config = db.get_user_config(user_id).await.unwrap_or_default();
     let tr = i18n::get_translations(&user_config.language);
 
-    // Handle Commands
-    if let Some(text) = msg.text() {
-        if text.starts_with('/') {
-            let cmd = text.split('@').next().unwrap_or("");
+    // 1. Detect URLs early
+    let (text, entities) = if let Some(t) = msg.text() {
+        (t, msg.entities())
+    } else if let Some(c) = msg.caption() {
+        (c, msg.caption_entities())
+    } else {
+        ( "", None ) // Use empty text if neither text nor caption exists
+    };
+
+    let has_urls = entities.map(|e| e.iter().any(|entity| {
+        matches!(entity.kind, MessageEntityKind::Url | MessageEntityKind::TextLink { .. })
+    })).unwrap_or(false);
+
+    // Handle Commands (Only in private or if explicitly targeted)
+    if let Some(text_val) = msg.text() {
+        if text_val.starts_with('/') {
+            let cmd = text_val.split('@').next().unwrap_or("");
             let is_private = msg.chat.is_private();
             let bot_username = format!("@{}", config.bot_username);
-            let is_targeted = text.contains(&bot_username) || is_private;
+            let is_targeted = text_val.contains(&bot_username) || is_private;
 
             if is_targeted {
                 match cmd {
@@ -89,7 +102,7 @@ async fn handle_message(
         }
     }
 
-    // Persist/Update chat info
+    // Persist/Update chat info (Only if it's a group context)
     if msg.chat.is_group() || msg.chat.is_supergroup() || msg.chat.is_channel() {
         let title = msg.chat.title().map(|s| s.to_string());
         let chat_config_db = db.get_chat_config(chat_id.0).await.unwrap_or(None);
@@ -103,8 +116,8 @@ async fn handle_message(
             mode: chat_config_db.map(|c| c.mode).unwrap_or_else(|| "default".to_string()),
         }).await;
 
-        // If it's a new chat, notify the user privately
-        if !chat_exists && user_id != 0 {
+        // If it's a new chat AND we found a URL, notify the user privately
+        if !chat_exists && user_id != 0 && has_urls {
             let notify_text = format!(
                 "🛡️ <b>ClearURLs attivato!</b>\n\nHo iniziato a proteggere il gruppo: <b>{}</b>\n\nPuoi disattivarlo o cambiare modalità dal tuo dashboard.",
                 html::escape(&title.unwrap_or_else(|| "Sconosciuto".to_string()))
@@ -113,6 +126,10 @@ async fn handle_message(
                 .parse_mode(ParseMode::Html)
                 .await;
         }
+    }
+
+    if !has_urls {
+        return Ok(());
     }
 
     let chat_config = db.get_chat_config_or_default(chat_id.0).await.unwrap_or_default();
@@ -124,18 +141,7 @@ async fn handle_message(
         return Ok(())
     }
 
-    let (text, entities) = if let Some(t) = msg.text() {
-        (t, msg.entities())
-    } else if let Some(c) = msg.caption() {
-        (c, msg.caption_entities())
-    } else {
-        return Ok(());
-    };
-
-    let entities = match entities {
-        Some(e) => e,
-        None => return Ok(()),
-    };
+    let entities = entities.unwrap(); // Safe because has_urls is true
 
     let ignored_domains: Vec<String> = user_config.ignored_domains.split(',')
         .map(|s| s.trim().to_lowercase())
