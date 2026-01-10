@@ -5,3 +5,5 @@
 .envwasm-functions/target/
 .vercel
 .env*.local
+wasm-functions/target/
+.env
