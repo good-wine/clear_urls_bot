@@ -1,7 +1,7 @@
 use teloxide::prelude::*;
 use teloxide::types::{ParseMode, ReplyParameters, MessageEntityKind};
 use teloxide::utils::html;
-use crate::{sanitizer::RuleEngine, ai_sanitizer::AiEngine, db::Db, models::ChatConfig, i18n};
+use crate::{sanitizer::RuleEngine, ai_sanitizer::AiEngine, db::Db, i18n};
 
 pub async fn run_bot(
     bot: Bot, 
@@ -107,18 +107,22 @@ async fn handle_message(
     }
 
     // Persist/Update chat info
-    if msg.chat.is_group() || msg.chat.is_supergroup() || msg.chat.is_channel() {
+    let is_group_context = msg.chat.is_group() || msg.chat.is_supergroup() || msg.chat.is_channel();
+    let mut chat_config = db.get_chat_config_or_default(chat_id.0).await.unwrap_or_default();
+
+    if is_group_context {
         let title = msg.chat.title().map(|s| s.to_string());
         let chat_config_db = db.get_chat_config(chat_id.0).await.unwrap_or(None);
         let chat_exists = chat_config_db.is_some();
         
-        let _ = db.save_chat_config(&ChatConfig {
-            chat_id: chat_id.0,
-            title: title.clone(),
-            enabled: true,
-            added_by: user_id,
-            mode: chat_config_db.map(|c| c.mode).unwrap_or_else(|| "default".to_string()),
-        }).await;
+        // Only save if it's new or title changed
+        if !chat_exists || chat_config.title != title {
+            chat_config.title = title.clone();
+            if !chat_exists {
+                chat_config.added_by = user_id;
+            }
+            let _ = db.save_chat_config(&chat_config).await;
+        }
 
         if !chat_exists && user_id != 0 && has_urls {
             let notify_text = format!(
@@ -132,15 +136,19 @@ async fn handle_message(
     }
 
     if !has_urls {
-        return Ok(())
+        return Ok(());
     }
 
-    let chat_config = db.get_chat_config_or_default(chat_id.0).await.unwrap_or_default();
-    let chat_enabled = chat_config.enabled;
-    let user_enabled = user_config.enabled;
+    // Logic: In groups, only check if the group enabled the bot.
+    // In private, check if the user enabled the bot.
+    let is_enabled = if is_group_context {
+        chat_config.enabled
+    } else {
+        user_config.enabled
+    };
 
-    if !chat_enabled || !user_enabled {
-        tracing::debug!(chat_enabled, user_enabled, "Message ignored: bot or user disabled for this chat");
+    if !is_enabled {
+        tracing::debug!(is_group_context, chat_id = %chat_id, "Bot is disabled for this context");
         return Ok(())
     }
 
