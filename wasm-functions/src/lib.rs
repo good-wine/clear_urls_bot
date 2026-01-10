@@ -15,7 +15,9 @@ pub fn clean_url_simple(input_url: &str) -> String {
     let mut new_query = Vec::new();
     let tracking_params = [
         "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
-        "fbclid", "gclid", "msclkid", "mc_eid", "_hsenc", "_hsmi"
+        "fbclid", "gclid", "msclkid", "mc_eid", "_hsenc", "_hsmi",
+        "gs_lcrp", "oq", "sourceid", "client", "bih", "biw", "ved", "ei",
+        "iflsig", "adgrpid", "nw", "matchtype"
     ];
 
     for (k, v) in query_pairs {

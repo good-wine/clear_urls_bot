@@ -17,15 +17,14 @@ Thank you for your interest in contributing! We welcome all contributions that h
    ```
 
 3. **Running Locally**:
-   - Start the database (SQLite by default): `cargo run`
-   - Run the web dashboard: `cargo run --bin clear_urls_bot` (includes bot and web)
+   - Start the bot and dashboard: `cargo run`
 
 ## 🧪 Testing & Quality
 
 Always run these commands before submitting a PR:
 - **Format**: `cargo fmt`
 - **Lint**: `cargo clippy`
-- **Check Targets**: `cargo check --all-targets --features vercel`
+- **Check Targets**: `cargo check --all-targets`
 - **Test**: `cargo test`
 
 ## 📬 Pull Request Process
