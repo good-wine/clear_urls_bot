@@ -28,7 +28,7 @@ async fn main() -> anyhow::Result<()> {
     let (event_tx, _) = tokio::sync::broadcast::channel::<serde_json::Value>(100);
 
     let bot_task = tokio::spawn(bot::run_bot(bot, db.clone(), rules.clone(), ai, config.clone(), event_tx.clone()));
-    let web_task = web::run_server(config, db, event_tx);
+    let web_task = tokio::spawn(web::run_server(config, db, event_tx));
 
     let rules_refresh = rules.clone();
     let refresh_task = tokio::spawn(async move {
@@ -48,11 +48,17 @@ async fn main() -> anyhow::Result<()> {
                 Err(e) => tracing::error!("Bot task panicked: {:?}", e),
             }
         }
-        _ = web_task => {
-            tracing::error!("Web server task finished unexpectedly");
+        res = web_task => {
+            match res {
+                Ok(_) => tracing::error!("Web server task finished unexpectedly"),
+                Err(e) => tracing::error!("Web server task panicked: {:?}", e),
+            }
         }
-        _ = refresh_task => {
-            tracing::error!("Refresh task finished unexpectedly");
+        res = refresh_task => {
+            match res {
+                Ok(_) => tracing::error!("Refresh task finished unexpectedly"),
+                Err(e) => tracing::error!("Refresh task panicked: {:?}", e),
+            }
         }
     }
 
