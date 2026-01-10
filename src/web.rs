@@ -90,7 +90,7 @@ pub fn create_app(state: AppState) -> Router {
         .route("/admin", get(admin_dashboard))
         .layer(SetResponseHeaderLayer::overriding(
             header::CONTENT_SECURITY_POLICY,
-            HeaderValue::from_static("default-src 'self' https://cdn.jsdelivr.net; script-src 'self' 'unsafe-inline' https://telegram.org https://oauth.telegram.org https://cdn.jsdelivr.net; frame-src https://oauth.telegram.org https://telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' https://t.me https://telegram.org https://*.telegram.org data:; connect-src 'self' https://telegram.org https://oauth.telegram.org https://cdn.jsdelivr.net;"),
+            HeaderValue::from_static("default-src 'self' https://cdn.jsdelivr.net; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org https://oauth.telegram.org https://cdn.jsdelivr.net; frame-src https://oauth.telegram.org https://telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' https://t.me https://telegram.org https://*.telegram.org data:; connect-src 'self' https://telegram.org https://oauth.telegram.org https://cdn.jsdelivr.net;"),
         ))
         .layer(SetResponseHeaderLayer::overriding(
             header::X_FRAME_OPTIONS,
