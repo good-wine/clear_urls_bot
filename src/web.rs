@@ -595,7 +595,7 @@ fn verify_telegram_webapp_data(init_data: &str, token: &str) -> Option<TelegramU
         .collect::<Vec<String>>()
         .join("\n");
 
-    use sha2::{Digest, Sha256};
+    use sha2::Sha256;
     // For WebApps, the secret key is HMAC-SHA256("WebAppData", token)
     type HmacSha256 = Hmac<Sha256>;
     let mut mac_secret = HmacSha256::new_from_slice(b"WebAppData").expect("HMAC error");
