@@ -480,7 +480,15 @@ fn verify_telegram_auth(params: &HashMap<String, String>, token: &str) -> bool {
                 Ok(d) => d.as_secs(),
                 Err(_) => 0,
             };
-            if now > 0 && now - auth_date > 86400 {
+            
+            // Fix: Use saturating_sub to avoid panic if now < auth_date (clock skew)
+            // Allow for some clock drift (e.g. 30 seconds into the future is fine)
+            if auth_date > now + 30 {
+                tracing::warn!("Telegram auth failed: auth_date is in the future (skew?): {} > {}", auth_date, now);
+                return false;
+            }
+            
+            if now.saturating_sub(auth_date) > 86400 {
                 tracing::warn!("Telegram auth failed: Data is too old (auth_date: {})", auth_date);
                 return false;
             }
@@ -519,4 +527,56 @@ fn verify_telegram_auth(params: &HashMap<String, String>, token: &str) -> bool {
     }
 
     is_valid
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_verify_telegram_auth() {
+        // Test vector from manual verification or assumption
+        // We simulate a valid hash calculation
+        let token = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11";
+        let mut params = HashMap::new();
+        params.insert("id".to_string(), "123456789".to_string());
+        params.insert("first_name".to_string(), "John".to_string());
+        params.insert("username".to_string(), "johndoe".to_string());
+        params.insert("auth_date".to_string(), "1700000000".to_string());
+        
+        // Calculate expected hash manually for this test
+        use sha2::{Digest, Sha256};
+        use hmac::{Hmac, Mac};
+        
+        let secret_key = Sha256::digest(token.as_bytes());
+        type HmacSha256 = Hmac<Sha256>;
+        let mut mac = HmacSha256::new_from_slice(&secret_key).unwrap();
+        
+        // "auth_date=1700000000\nfirst_name=John\nid=123456789\nusername=johndoe"
+        let data_check = "auth_date=1700000000\nfirst_name=John\nid=123456789\nusername=johndoe";
+        mac.update(data_check.as_bytes());
+        let valid_hash = hex::encode(mac.finalize().into_bytes());
+        
+        params.insert("hash".to_string(), valid_hash.clone());
+        
+        // Note: This test might fail if system time is far from 1700000000 (Nov 2023).
+        // To make it robust, we should mock time or use a recent timestamp.
+        // For this unit test, let's use a very recent timestamp.
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        let auth_date = now.to_string();
+        params.insert("auth_date".to_string(), auth_date.clone());
+        
+        // Recalculate hash with new date
+        let data_check = format!("auth_date={}\nfirst_name=John\nid=123456789\nusername=johndoe", auth_date);
+        let mut mac = HmacSha256::new_from_slice(&secret_key).unwrap();
+        mac.update(data_check.as_bytes());
+        let valid_hash = hex::encode(mac.finalize().into_bytes());
+        params.insert("hash".to_string(), valid_hash);
+
+        assert!(verify_telegram_auth(&params, token));
+        
+        // Test tampering
+        params.insert("first_name".to_string(), "Evil".to_string());
+        assert!(!verify_telegram_auth(&params, token));
+    }
 }
