@@ -11,12 +11,5 @@
       "src": "/(.*)",
       "dest": "api/index.rs"
     }
-  ],
-  "env": {
-    "DATABASE_URL": "DATABASE_URL",
-    "BOT_TOKEN": "BOT_TOKEN",
-    "BOT_USERNAME": "BOT_USERNAME",
-    "ADMIN_ID": "ADMIN_ID",
-    "COOKIE_KEY": "COOKIE_KEY"
-  }
+  ]
 }
