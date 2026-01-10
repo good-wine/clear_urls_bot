@@ -58,10 +58,16 @@ async fn handle_message(
     // Handle Commands
     if let Some(text_val) = msg.text() {
         if text_val.starts_with('/') {
-            let cmd = text_val.split('@').next().unwrap_or("");
+            let cmd_parts: Vec<&str> = text_val.split('@').collect();
+            let cmd = cmd_parts[0];
             let is_private = msg.chat.is_private();
-            let bot_username = format!("@{}", config.bot_username);
-            let is_targeted = text_val.contains(&bot_username) || is_private;
+            let bot_username = config.bot_username.to_lowercase();
+            
+            let is_targeted = if cmd_parts.len() > 1 {
+                cmd_parts[1].to_lowercase().starts_with(&bot_username)
+            } else {
+                is_private
+            };
 
             if is_targeted {
                 match cmd {
@@ -134,6 +140,7 @@ async fn handle_message(
     let user_enabled = user_config.enabled;
 
     if !chat_enabled || !user_enabled {
+        tracing::debug!(chat_enabled, user_enabled, "Message ignored: bot or user disabled for this chat");
         return Ok(())
     }
 
