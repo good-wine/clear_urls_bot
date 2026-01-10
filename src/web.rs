@@ -50,6 +50,7 @@ pub struct TelegramUserSession {
 #[template(path = "login.html")]
 struct LoginTemplate {
     bot_username: String,
+    dashboard_url: String,
 }
 
 #[derive(Template)]
@@ -244,6 +245,7 @@ async fn clear_history(State(state): State<AppState>, jar: SignedCookieJar) -> i
 async fn login_page(State(state): State<AppState>) -> impl IntoResponse {
     let template = LoginTemplate {
         bot_username: state.config.bot_username,
+        dashboard_url: state.config.dashboard_url.to_string().trim_end_matches('/').to_string(),
     };
     match template.render() {
         Ok(html) => Html(html).into_response(),
