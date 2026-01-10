@@ -3,7 +3,7 @@ services:
     name: clear-urls-bot
     env: docker
     dockerCommand: clear_urls_bot
-    plan: free
+    plan: starter # Starter plan required for persistent disk
     region: frankfurt
     envVars:
       - key: APP_ENV
@@ -11,7 +11,10 @@ services:
       - key: RUST_LOG
         value: clear_urls_bot=info,teloxide=info,axum=info
       - key: DATABASE_URL
-        value: sqlite:/etc/clearurls/bot.db?mode=rwc
+        # Priority: postgres from environment (if linked), then sqlite disk
+        fromDatabase:
+          name: clear-urls-db
+          property: connectionString
       - key: TELOXIDE_TOKEN
         sync: false
       - key: BOT_USERNAME
@@ -27,3 +30,8 @@ services:
       mountPath: /etc/clearurls
       sizeGB: 1
     healthCheckPath: /health
+
+databases:
+  - name: clear-urls-db
+    plan: free
+    region: frankfurt

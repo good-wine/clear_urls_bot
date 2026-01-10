@@ -48,11 +48,32 @@ impl Db {
 
         sqlx::query(create_user_configs).execute(&self.pool).await?;
 
-        // migrations
-        let _ = sqlx::query("ALTER TABLE user_configs ADD COLUMN ai_enabled BOOLEAN NOT NULL DEFAULT FALSE").execute(&self.pool).await;
-        let _ = sqlx::query("ALTER TABLE user_configs ADD COLUMN ignored_domains TEXT NOT NULL DEFAULT ''").execute(&self.pool).await;
-        let _ = sqlx::query("ALTER TABLE user_configs ADD COLUMN cleaned_count BIGINT NOT NULL DEFAULT 0").execute(&self.pool).await;
-        let _ = sqlx::query("ALTER TABLE user_configs ADD COLUMN language TEXT NOT NULL DEFAULT 'en'").execute(&self.pool).await;
+        // Robust migrations: check if columns exist before adding
+        if is_sqlite {
+            let table_info: Vec<(i64, String, String, i32, Option<String>, i32)> = 
+                sqlx::query_as("PRAGMA table_info(user_configs)").fetch_all(&self.pool).await?;
+            
+            let cols: Vec<String> = table_info.into_iter().map(|(_, name, _, _, _, _)| name).collect();
+            
+            if !cols.contains(&"ai_enabled".to_string()) {
+                sqlx::query("ALTER TABLE user_configs ADD COLUMN ai_enabled INTEGER NOT NULL DEFAULT 0").execute(&self.pool).await?;
+            }
+            if !cols.contains(&"ignored_domains".to_string()) {
+                sqlx::query("ALTER TABLE user_configs ADD COLUMN ignored_domains TEXT NOT NULL DEFAULT ''").execute(&self.pool).await?;
+            }
+            if !cols.contains(&"cleaned_count".to_string()) {
+                sqlx::query("ALTER TABLE user_configs ADD COLUMN cleaned_count INTEGER NOT NULL DEFAULT 0").execute(&self.pool).await?;
+            }
+            if !cols.contains(&"language".to_string()) {
+                sqlx::query("ALTER TABLE user_configs ADD COLUMN language TEXT NOT NULL DEFAULT 'en'").execute(&self.pool).await?;
+            }
+        } else {
+            // Postgres migration logic
+            sqlx::query("ALTER TABLE user_configs ADD COLUMN IF NOT EXISTS ai_enabled BOOLEAN NOT NULL DEFAULT FALSE").execute(&self.pool).await?;
+            sqlx::query("ALTER TABLE user_configs ADD COLUMN IF NOT EXISTS ignored_domains TEXT NOT NULL DEFAULT ''").execute(&self.pool).await?;
+            sqlx::query("ALTER TABLE user_configs ADD COLUMN IF NOT EXISTS cleaned_count BIGINT NOT NULL DEFAULT 0").execute(&self.pool).await?;
+            sqlx::query("ALTER TABLE user_configs ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'en'").execute(&self.pool).await?;
+        }
 
         let create_chat_configs = if is_sqlite {
             "CREATE TABLE IF NOT EXISTS chat_configs (
@@ -72,7 +93,17 @@ impl Db {
             )"
         };
         sqlx::query(create_chat_configs).execute(&self.pool).await?;
-        let _ = sqlx::query("ALTER TABLE chat_configs ADD COLUMN mode TEXT NOT NULL DEFAULT 'default'").execute(&self.pool).await;
+        
+        if is_sqlite {
+            let table_info: Vec<(i64, String, String, i32, Option<String>, i32)> = 
+                sqlx::query_as("PRAGMA table_info(chat_configs)").fetch_all(&self.pool).await?;
+            let cols: Vec<String> = table_info.into_iter().map(|(_, name, _, _, _, _)| name).collect();
+            if !cols.contains(&"mode".to_string()) {
+                sqlx::query("ALTER TABLE chat_configs ADD COLUMN mode TEXT NOT NULL DEFAULT 'default'").execute(&self.pool).await?;
+            }
+        } else {
+            sqlx::query("ALTER TABLE chat_configs ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'default'").execute(&self.pool).await?;
+        }
 
         let create_rules = if is_sqlite {
             "CREATE TABLE IF NOT EXISTS custom_rules (
@@ -109,7 +140,16 @@ impl Db {
             )"
         };
         sqlx::query(create_history).execute(&self.pool).await?;
-        let _ = sqlx::query("ALTER TABLE cleaned_links ADD COLUMN provider_name TEXT").execute(&self.pool).await;
+        if is_sqlite {
+            let table_info: Vec<(i64, String, String, i32, Option<String>, i32)> = 
+                sqlx::query_as("PRAGMA table_info(cleaned_links)").fetch_all(&self.pool).await?;
+            let cols: Vec<String> = table_info.into_iter().map(|(_, name, _, _, _, _)| name).collect();
+            if !cols.contains(&"provider_name".to_string()) {
+                sqlx::query("ALTER TABLE cleaned_links ADD COLUMN provider_name TEXT").execute(&self.pool).await?;
+            }
+        } else {
+            sqlx::query("ALTER TABLE cleaned_links ADD COLUMN IF NOT EXISTS provider_name TEXT").execute(&self.pool).await?;
+        }
 
         Ok(())
     }
