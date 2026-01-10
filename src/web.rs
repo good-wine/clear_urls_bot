@@ -1,22 +1,28 @@
-use axum::{
-    extract::{State, Query, FromRef},
-    response::{Html, Redirect, IntoResponse, Response, sse::{Event, Sse}},
-    routing::{get, post},
-    Router,
-    Form,
-    http::{HeaderValue, header},
+use crate::{
+    config::Config,
+    db::Db,
+    models::{ChatConfig, UserConfig},
 };
-use axum_extra::extract::cookie::{Cookie, SignedCookieJar, Key};
-use crate::{db::Db, config::Config, models::{UserConfig, ChatConfig}};
 use askama::Template;
-use std::collections::HashMap;
-use hmac::{Hmac, Mac};
-use tracing::info;
-use hex;
-use tower_http::set_header::SetResponseHeaderLayer;
-use time::Duration;
+use axum::{
+    extract::{FromRef, Query, State},
+    http::{header, HeaderValue},
+    response::{
+        sse::{Event, Sse},
+        Html, IntoResponse, Redirect, Response,
+    },
+    routing::{get, post},
+    Form, Router,
+};
+use axum_extra::extract::cookie::{Cookie, Key, SignedCookieJar};
 use futures::stream::Stream;
+use hex;
+use hmac::{Hmac, Mac};
+use std::collections::HashMap;
 use std::convert::Infallible;
+use time::Duration;
+use tower_http::set_header::SetResponseHeaderLayer;
+use tracing::info;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -84,7 +90,7 @@ pub fn create_app(state: AppState) -> Router {
         .route("/admin", get(admin_dashboard))
         .layer(SetResponseHeaderLayer::overriding(
             header::CONTENT_SECURITY_POLICY,
-            HeaderValue::from_static("default-src 'self' https://cdn.jsdelivr.net; script-src 'self' 'unsafe-inline' https://telegram.org https://cdn.jsdelivr.net; frame-src https://oauth.telegram.org https://telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' https://t.me https://telegram.org data:; connect-src 'self';"),
+            HeaderValue::from_static("default-src 'self' https://cdn.jsdelivr.net; script-src 'self' 'unsafe-inline' https://telegram.org https://oauth.telegram.org https://cdn.jsdelivr.net; frame-src https://oauth.telegram.org https://telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' https://t.me https://telegram.org https://*.telegram.org data:; connect-src 'self' https://telegram.org https://oauth.telegram.org;"),
         ))
         .layer(SetResponseHeaderLayer::overriding(
             header::X_FRAME_OPTIONS,
@@ -98,14 +104,14 @@ pub fn create_app(state: AppState) -> Router {
 }
 
 pub async fn run_server(
-    config: Config, 
-    db: Db, 
+    config: Config,
+    db: Db,
     event_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
 ) {
     let key = if let Some(ref k) = config.cookie_key {
         if k.len() < 64 {
             // If the key is too short, we derive a 64-byte key using SHA-512
-            use sha2::{Sha512, Digest};
+            use sha2::{Digest, Sha512};
             let hash = Sha512::digest(k.as_bytes());
             Key::from(&hash[..])
         } else {
@@ -114,7 +120,7 @@ pub async fn run_server(
     } else {
         Key::generate()
     };
-    
+
     let state = AppState {
         db: db.clone(),
         config: config.clone(),
@@ -124,19 +130,24 @@ pub async fn run_server(
 
     let app = create_app(state);
 
-    let listener = tokio::net::TcpListener::bind(&config.server_addr).await.expect("Failed to bind to address");
+    let listener = tokio::net::TcpListener::bind(&config.server_addr)
+        .await
+        .expect("Failed to bind to address");
     info!("Web dashboard listening on {}", config.server_addr);
-    axum::serve(listener, app).await.expect("Failed to start server");
+    axum::serve(listener, app)
+        .await
+        .expect("Failed to start server");
 }
 
-async fn index(
-    State(state): State<AppState>,
-    jar: SignedCookieJar,
-) -> Response {
+async fn index(State(state): State<AppState>, jar: SignedCookieJar) -> Response {
     if let Some(user_cookie) = jar.get("user_session") {
         if let Ok(user) = serde_json::from_str::<TelegramUserSession>(user_cookie.value()) {
             let user_config = state.db.get_user_config(user.id).await.unwrap_or_default();
-            let chats = state.db.get_chats_for_user(user.id).await.unwrap_or_default();
+            let chats = state
+                .db
+                .get_chats_for_user(user.id)
+                .await
+                .unwrap_or_default();
             let history = state.db.get_history(user.id, 10).await.unwrap_or_default();
             let custom_rules = state.db.get_custom_rules(user.id).await.unwrap_or_default();
             let mut stats_by_day = state.db.get_stats_by_day(user.id).await.unwrap_or_default();
@@ -156,7 +167,11 @@ async fn index(
             };
             return match template.render() {
                 Ok(html) => Html(html).into_response(),
-                Err(_) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Template Error").into_response(),
+                Err(_) => (
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    "Template Error",
+                )
+                    .into_response(),
             };
         }
     }
@@ -217,10 +232,7 @@ async fn delete_custom_rule(
     Redirect::to("/")
 }
 
-async fn clear_history(
-    State(state): State<AppState>,
-    jar: SignedCookieJar,
-) -> impl IntoResponse {
+async fn clear_history(State(state): State<AppState>, jar: SignedCookieJar) -> impl IntoResponse {
     if let Some(user_cookie) = jar.get("user_session") {
         if let Ok(user) = serde_json::from_str::<TelegramUserSession>(user_cookie.value()) {
             let _ = state.db.clear_history(user.id).await;
@@ -235,7 +247,11 @@ async fn login_page(State(state): State<AppState>) -> impl IntoResponse {
     };
     match template.render() {
         Ok(html) => Html(html).into_response(),
-        Err(_) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Template Error").into_response(),
+        Err(_) => (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            "Template Error",
+        )
+            .into_response(),
     }
 }
 
@@ -245,16 +261,18 @@ async fn auth_callback(
     Query(params): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
     let token = &state.config.bot_token;
-    
+
     if verify_telegram_auth(&params, token) {
         let user_id_str = params.get("id");
         if user_id_str.is_none() {
-             return Redirect::to("/login").into_response();
+            return Redirect::to("/login").into_response();
         }
 
-        let user_id = user_id_str.and_then(|id| id.parse::<i64>().ok()).unwrap_or(0);
+        let user_id = user_id_str
+            .and_then(|id| id.parse::<i64>().ok())
+            .unwrap_or(0);
         if user_id == 0 {
-             return Redirect::to("/login").into_response();
+            return Redirect::to("/login").into_response();
         }
 
         let user = TelegramUserSession {
@@ -266,7 +284,13 @@ async fn auth_callback(
 
         let cookie_val = match serde_json::to_string(&user) {
             Ok(v) => v,
-            Err(_) => return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Session Error").into_response(),
+            Err(_) => {
+                return (
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    "Session Error",
+                )
+                    .into_response()
+            }
         };
         let cookie = Cookie::build(("user_session", cookie_val))
             .path("/")
@@ -282,7 +306,10 @@ async fn auth_callback(
 }
 
 async fn logout(_state: State<AppState>, jar: SignedCookieJar) -> impl IntoResponse {
-    (jar.remove(Cookie::from("user_session")), Redirect::to("/login"))
+    (
+        jar.remove(Cookie::from("user_session")),
+        Redirect::to("/login"),
+    )
 }
 
 #[derive(serde::Deserialize)]
@@ -344,18 +371,23 @@ struct AdminTemplate {
     total_users: i64,
 }
 
-async fn admin_dashboard(
-    State(state): State<AppState>,
-    jar: SignedCookieJar,
-) -> Response {
+async fn admin_dashboard(State(state): State<AppState>, jar: SignedCookieJar) -> Response {
     if let Some(user_cookie) = jar.get("user_session") {
         if let Ok(user) = serde_json::from_str::<TelegramUserSession>(user_cookie.value()) {
             if user.id == state.config.admin_id {
-                let (total_cleaned, total_users) = state.db.get_global_stats().await.unwrap_or((0, 0));
-                let template = AdminTemplate { total_cleaned, total_users };
+                let (total_cleaned, total_users) =
+                    state.db.get_global_stats().await.unwrap_or((0, 0));
+                let template = AdminTemplate {
+                    total_cleaned,
+                    total_users,
+                };
                 return match template.render() {
                     Ok(html) => Html(html).into_response(),
-                    Err(_) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Template Error").into_response(),
+                    Err(_) => (
+                        axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                        "Template Error",
+                    )
+                        .into_response(),
                 };
             }
         }
@@ -363,13 +395,14 @@ async fn admin_dashboard(
     Redirect::to("/").into_response()
 }
 
-async fn export_history(
-    State(state): State<AppState>,
-    jar: SignedCookieJar,
-) -> Response {
+async fn export_history(State(state): State<AppState>, jar: SignedCookieJar) -> Response {
     if let Some(user_cookie) = jar.get("user_session") {
         if let Ok(user) = serde_json::from_str::<TelegramUserSession>(user_cookie.value()) {
-            let history = state.db.get_history(user.id, 1000).await.unwrap_or_default();
+            let history = state
+                .db
+                .get_history(user.id, 1000)
+                .await
+                .unwrap_or_default();
             let mut csv = String::from("ID,Original URL,Cleaned URL,Provider,Timestamp\n");
             for link in history {
                 csv.push_str(&format!(
@@ -381,14 +414,22 @@ async fn export_history(
                     link.timestamp
                 ));
             }
-            
+
             return match Response::builder()
                 .header(header::CONTENT_TYPE, "text/csv")
-                .header(header::CONTENT_DISPOSITION, "attachment; filename=\"history.csv\"")
-                .body(axum::body::Body::from(csv)) {
-                    Ok(r) => r,
-                    Err(_) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Export Error").into_response(),
-                };
+                .header(
+                    header::CONTENT_DISPOSITION,
+                    "attachment; filename=\"history.csv\"",
+                )
+                .body(axum::body::Body::from(csv))
+            {
+                Ok(r) => r,
+                Err(_) => (
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    "Export Error",
+                )
+                    .into_response(),
+            };
         }
     }
     Redirect::to("/login").into_response()
@@ -401,8 +442,12 @@ async fn events_handler(
     let user_id = if let Some(user_cookie) = jar.get("user_session") {
         if let Ok(user) = serde_json::from_str::<TelegramUserSession>(user_cookie.value()) {
             user.id
-        } else { 0 }
-    } else { 0 };
+        } else {
+            0
+        }
+    } else {
+        0
+    };
 
     let mut rx = state.event_tx.subscribe();
 
@@ -429,11 +474,10 @@ fn verify_telegram_auth(params: &HashMap<String, String>, token: &str) -> bool {
 
     if let Some(auth_date_str) = params.get("auth_date") {
         if let Ok(auth_date) = auth_date_str.parse::<u64>() {
-            let now = match std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH) {
-                    Ok(d) => d.as_secs(),
-                    Err(_) => 0,
-                };
+            let now = match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+                Ok(d) => d.as_secs(),
+                Err(_) => 0,
+            };
             if now > 0 && now - auth_date > 86400 {
                 return false;
             }
@@ -443,18 +487,19 @@ fn verify_telegram_auth(params: &HashMap<String, String>, token: &str) -> bool {
     let mut keys: Vec<&String> = params.keys().filter(|k| k.as_str() != "hash").collect();
     keys.sort();
 
-    let data_check_string = keys.iter() 
+    let data_check_string = keys
+        .iter()
         .map(|k| format!("{}={}", k, params.get(*k).map(|s| s.as_str()).unwrap_or("")))
         .collect::<Vec<String>>()
         .join("\n");
 
     use sha2::{Digest, Sha256};
     let secret_key = Sha256::digest(token.as_bytes());
-    
+
     type HmacSha256 = Hmac<Sha256>;
     let mut mac = HmacSha256::new_from_slice(&secret_key).expect("HMAC error");
     mac.update(data_check_string.as_bytes());
-    
+
     let computed_hash = hex::encode(mac.finalize().into_bytes());
     computed_hash == *hash
 }
