@@ -17,12 +17,17 @@ async fn main() -> anyhow::Result<()> {
     let db = Db::new(&config.database_url).await?;
     let rules = RuleEngine::new(&config.clearurls_source).await?;
     let ai = AiEngine::new(&config);
-    let bot = Bot::new(&config.bot_token);
+    
+    // Create a custom reqwest client with a longer timeout for Telegram polling
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(60))
+        .build()?;
+    let bot = Bot::with_client(&config.bot_token, client);
     
     // Canale per eventi real-time (SSE)
     let (event_tx, _) = tokio::sync::broadcast::channel::<serde_json::Value>(100);
 
-    let bot_task = bot::run_bot(bot, db.clone(), rules.clone(), ai, config.clone(), event_tx.clone());
+    let bot_task = tokio::spawn(bot::run_bot(bot, db.clone(), rules.clone(), ai, config.clone(), event_tx.clone()));
     let web_task = web::run_server(config, db, event_tx);
 
     let rules_refresh = rules.clone();
@@ -37,8 +42,11 @@ async fn main() -> anyhow::Result<()> {
     });
 
     tokio::select! {
-        _ = bot_task => {
-            tracing::error!("Bot task finished unexpectedly");
+        res = bot_task => {
+            match res {
+                Ok(_) => tracing::error!("Bot task finished unexpectedly"),
+                Err(e) => tracing::error!("Bot task panicked: {:?}", e),
+            }
         }
         _ = web_task => {
             tracing::error!("Web server task finished unexpectedly");

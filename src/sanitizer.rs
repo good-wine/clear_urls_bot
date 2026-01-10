@@ -60,7 +60,9 @@ impl RuleEngine {
 
     pub async fn refresh(&self) -> Result<()> {
         info!("Fetching rules from {}", self.source_url);
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .build()?;
         let resp = client.get(&self.source_url).send().await?.text().await?;
         
         let data: ClearUrlsData = serde_json::from_str(&resp).context("Failed to parse ClearURLs JSON")?;

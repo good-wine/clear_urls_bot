@@ -175,9 +175,15 @@ impl Db {
     pub async fn save_user_config(&self, config: &UserConfig) -> Result<()> {
         sqlx::query(
             "INSERT INTO user_configs (user_id, enabled, ai_enabled, mode, ignored_domains, cleaned_count, language) VALUES (?, ?, ?, ?, ?, ?, ?)
-             ON CONFLICT(user_id) DO UPDATE SET enabled = excluded.enabled, ai_enabled = excluded.ai_enabled, mode = excluded.mode, ignored_domains = excluded.ignored_domains, cleaned_count = excluded.cleaned_count, language = excluded.language"
+             ON CONFLICT(user_id) DO UPDATE SET enabled = ?, ai_enabled = ?, mode = ?, ignored_domains = ?, cleaned_count = ?, language = ?"
         )
         .bind(config.user_id)
+        .bind(config.enabled)
+        .bind(config.ai_enabled)
+        .bind(&config.mode)
+        .bind(&config.ignored_domains)
+        .bind(config.cleaned_count)
+        .bind(&config.language)
         .bind(config.enabled)
         .bind(config.ai_enabled)
         .bind(&config.mode)
@@ -260,12 +266,15 @@ impl Db {
     pub async fn save_chat_config(&self, config: &ChatConfig) -> Result<()> {
         sqlx::query(
             "INSERT INTO chat_configs (chat_id, title, enabled, added_by, mode) VALUES (?, ?, ?, ?, ?)
-             ON CONFLICT(chat_id) DO UPDATE SET title = excluded.title, enabled = excluded.enabled, mode = excluded.mode"
+             ON CONFLICT(chat_id) DO UPDATE SET title = ?, enabled = ?, mode = ?"
         )
         .bind(config.chat_id)
         .bind(&config.title)
         .bind(config.enabled)
         .bind(config.added_by)
+        .bind(&config.mode)
+        .bind(&config.title)
+        .bind(config.enabled)
         .bind(&config.mode)
         .execute(&self.pool)
         .await?;
