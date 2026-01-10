@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use moka::future::Cache;
 use regex::Regex;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -69,6 +70,7 @@ struct CompiledProvider {
 pub struct RuleEngine {
     providers: Arc<RwLock<Vec<CompiledProvider>>>,
     source_url: String,
+    cache: Cache<String, String>,
 }
 
 impl RuleEngine {
@@ -76,6 +78,10 @@ impl RuleEngine {
         Self {
             providers: Arc::new(RwLock::new(Vec::new())),
             source_url: source_url.to_string(),
+            cache: Cache::builder()
+                .max_capacity(10_000)
+                .time_to_live(std::time::Duration::from_secs(3600)) // 1 hour TTL
+                .build(),
         }
     }
 
@@ -139,6 +145,11 @@ impl RuleEngine {
 
     #[tracing::instrument(skip(self))]
     pub async fn expand_url(&self, input_url: &str) -> String {
+        if let Some(cached) = self.cache.get(input_url).await {
+            tracing::debug!(url = %input_url, "Cache hit for URL expansion");
+            return cached;
+        }
+
         let client = match reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
             .redirect(reqwest::redirect::Policy::limited(5))
@@ -171,10 +182,16 @@ impl RuleEngine {
                 let final_url = resp.url().to_string();
                 if final_url != input_url {
                     tracing::info!(original = %input_url, expanded = %final_url, "URL expanded successfully");
+                    self.cache.insert(input_url.to_string(), final_url.clone()).await;
                     return final_url;
                 }
             }
         }
+
+        if is_shortener {
+             self.cache.insert(input_url.to_string(), input_url.to_string()).await;
+        }
+
         input_url.to_string()
     }
 
