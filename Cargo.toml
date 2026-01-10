@@ -29,16 +29,14 @@ tower = { version = "0.5", features = ["util"] }
 futures = "0.3"
 time = "0.3"
 async-stream = "0.3"
-vercel_runtime = { version = "2.1", optional = true, features = ["axum"] }
+vercel_runtime = { version = "2.1", features = ["axum"] }
 
 [[bin]]
 name = "index"
 path = "api/index.rs"
-required-features = ["vercel"]
 
 [features]
 default = []
-vercel = ["vercel_runtime"]
 supabase = []
 
 [profile.release]
