@@ -242,7 +242,37 @@ async fn clear_history(State(state): State<AppState>, jar: SignedCookieJar) -> i
     Redirect::to("/")
 }
 
-async fn login_page(State(state): State<AppState>) -> impl IntoResponse {
+async fn login_page(
+    State(state): State<AppState>,
+    jar: SignedCookieJar,
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    // If we have a hash, it means the user just logged in via the widget
+    if params.contains_key("hash") {
+        let token = &state.config.bot_token;
+        if verify_telegram_auth(&params, token) {
+            if let Some(user_id) = params.get("id").and_then(|id| id.parse::<i64>().ok()) {
+                let user = TelegramUserSession {
+                    id: user_id,
+                    first_name: params.get("first_name").cloned().unwrap_or_default(),
+                    username: params.get("username").cloned(),
+                    photo_url: params.get("photo_url").cloned(),
+                };
+
+                if let Ok(cookie_val) = serde_json::to_string(&user) {
+                    let cookie = Cookie::build(("user_session", cookie_val))
+                        .path("/")
+                        .http_only(true)
+                        .max_age(Duration::days(30))
+                        .same_site(axum_extra::extract::cookie::SameSite::Lax)
+                        .build();
+
+                    return (jar.add(cookie), Redirect::to("/")).into_response();
+                }
+            }
+        }
+    }
+
     let template = LoginTemplate {
         bot_username: state.config.bot_username.clone(),
         dashboard_url: state.config.dashboard_url.to_string().trim_end_matches('/').to_string(),
