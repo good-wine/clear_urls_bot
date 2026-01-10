@@ -230,9 +230,13 @@ async fn handle_message(
         return Ok(());
     }
 
-    let mut response = String::from(tr.cleaned_links);
-    for (_, cleaned, _) in &cleaned_urls {
-         response.push_str(&format!("• {}\n", html::escape(cleaned)));
+    let mut response = String::new();
+    if cleaned_urls.len() == 1 {
+        response = html::escape(&cleaned_urls[0].1);
+    } else {
+        for (_, cleaned, _) in &cleaned_urls {
+            response.push_str(&format!("• {}\n", html::escape(cleaned)));
+        }
     }
     
     bot.send_message(chat_id, response)
