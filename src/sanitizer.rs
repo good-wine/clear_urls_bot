@@ -112,7 +112,13 @@ impl RuleEngine {
     #[tracing::instrument(skip(self, custom_rules, ignored_domains))]
     pub fn sanitize(&self, text: &str, custom_rules: &[crate::models::CustomRule], ignored_domains: &[String]) -> Option<(String, String)> {
         tracing::debug!(url = %text, "Starting sanitization");
-        if let Ok(mut url) = Url::parse(text) {
+        
+        let mut url_to_parse = text.to_string();
+        if !url_to_parse.contains("://") && !url_to_parse.starts_with("mailto:") {
+            url_to_parse = format!("http://{}", url_to_parse);
+        }
+
+        if let Ok(mut url) = Url::parse(&url_to_parse) {
              if let Some(host) = url.host_str() {
                  if ignored_domains.iter().any(|d| host.contains(d)) {
                      tracing::debug!(host = %host, "URL host is in ignored domains");

@@ -53,9 +53,11 @@ async fn handle_message(
         ( "", None ) // Use empty text if neither text nor caption exists
     };
 
-    let has_urls = entities.map(|e| e.iter().any(|entity| {
+    let has_urls = entities.as_ref().map(|e| e.iter().any(|entity| {
         matches!(entity.kind, MessageEntityKind::Url | MessageEntityKind::TextLink { .. })
     })).unwrap_or(false);
+
+    tracing::debug!(has_urls = has_urls, "Message analyzed for URLs");
 
     // Handle Commands (Only in private or if explicitly targeted)
     if let Some(text_val) = msg.text() {
@@ -167,6 +169,7 @@ async fn handle_message(
             _ => continue,
         };
 
+        tracing::debug!(url = %url_str, "Detected URL entity");
         let original_url_str = url_str.clone();
         let mut current_url = url_str;
 
@@ -239,6 +242,7 @@ async fn handle_message(
         }
     }
     
+    tracing::info!(chat_id = %chat_id, "Sending cleaned URLs reply");
     bot.send_message(chat_id, response)
         .reply_parameters(ReplyParameters::new(msg.id))
         .parse_mode(ParseMode::Html)
