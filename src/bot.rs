@@ -268,7 +268,17 @@ async fn handle_message(
         return Ok(())
     }
 
-    let mut response = String::from(tr.cleaned_links);
+    let mut response = if is_group_context {
+        let user_name = msg.from.as_ref().map(|u| u.first_name.clone()).unwrap_or_else(|| "User".into());
+        tr.cleaned_for.replace("{}", &html::escape(&user_name))
+    } else {
+        String::from(tr.cleaned_links)
+    };
+
+    if !response.ends_with('\n') {
+        response.push('\n');
+    }
+
     if cleaned_urls.len() == 1 {
         response.push_str(&html::escape(&cleaned_urls[0].1));
     } else {
@@ -278,10 +288,17 @@ async fn handle_message(
     }
     
     tracing::info!(chat_id = %chat_id, "Sending cleaned URLs reply");
-    bot.send_message(chat_id, response)
+    
+    let mut request = bot.send_message(chat_id, response)
         .reply_parameters(ReplyParameters::new(msg.id))
-        .parse_mode(ParseMode::Html)
-        .await?;
+        .parse_mode(ParseMode::Html);
+
+    // Support for Supergroup topics/threads
+    if let Some(thread_id) = msg.thread_id {
+        request = request.message_thread_id(thread_id);
+    }
+
+    request.await?;
 
     Ok(())
 }
