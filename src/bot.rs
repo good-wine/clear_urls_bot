@@ -1,6 +1,7 @@
 use teloxide::prelude::*;
 use teloxide::types::{ParseMode, ReplyParameters, MessageEntityKind};
 use teloxide::utils::html;
+use regex::Regex;
 use crate::{sanitizer::RuleEngine, ai_sanitizer::AiEngine, db::Db, i18n};
 
 pub async fn run_bot(
@@ -51,9 +52,21 @@ async fn handle_message(
         ( "", None )
     };
 
-    let has_urls = entities.as_ref().map(|e| e.iter().any(|entity| {
+    let mut has_urls = entities.as_ref().map(|e| e.iter().any(|entity| {
         matches!(entity.kind, MessageEntityKind::Url | MessageEntityKind::TextLink { .. })
     })).unwrap_or(false);
+
+    // Manual fallback detection for schemeless URLs or cases where Telegram detection fails
+    if !has_urls {
+        // Simple but effective regex for detection
+        let url_pattern = r"(?i)(?:https?://|www\.)[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:/[^\s]*)?";
+        if let Ok(re) = Regex::new(url_pattern) {
+            if re.is_match(text) {
+                has_urls = true;
+                tracing::debug!("URL detected via manual regex fallback");
+            }
+        }
+    }
 
     // Handle Commands
     if let Some(text_val) = msg.text() {
@@ -159,9 +172,11 @@ async fn handle_message(
 
     let custom_rules = db.get_custom_rules(user_id).await.unwrap_or_default();
     let mut cleaned_urls = Vec::new();
-    let utf16: Vec<u16> = text.encode_utf16().collect();
+    let mut url_candidates = Vec::new();
 
+    // 1. Get URLs from Telegram Entities
     if let Some(ents) = entities {
+        let utf16: Vec<u16> = text.encode_utf16().collect();
         for entity in ents {
             let url_str = match &entity.kind {
                 MessageEntityKind::Url => {
@@ -175,29 +190,46 @@ async fn handle_message(
                 },
                 _ => continue,
             };
-
-            tracing::debug!(url = %url_str, "Detected URL entity");
-            let original_url_str = url_str.clone();
-            let mut current_url = url_str;
-
-            if let Some((cleaned, provider)) = rules.sanitize(&current_url, &custom_rules, &ignored_domains) {
-                 current_url = cleaned;
-                 
-                 if user_config.ai_enabled && config.ai_api_key.is_some() {
-                     if let Ok(Some(ai_cleaned)) = ai.sanitize(&current_url).await {
-                         current_url = ai_cleaned;
-                         let provider_name = format!("AI ({})", provider);
-                         cleaned_urls.push((original_url_str, current_url, provider_name));
-                         continue;
-                     }
-                 }
-
-                 cleaned_urls.push((original_url_str, current_url, provider));
-            } else if user_config.ai_enabled && config.ai_api_key.is_some() {
-                 if let Ok(Some(ai_cleaned)) = ai.sanitize(&current_url).await {
-                     cleaned_urls.push((original_url_str, ai_cleaned, "AI (Deep Scan)".to_string()));
-                 }
+            if !url_candidates.contains(&url_str) {
+                url_candidates.push(url_str);
             }
+        }
+    }
+
+    // 2. Supplement with Regex Detection
+    let url_pattern = r"(?i)(?:https?://|www\.)[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:/[^\s]*)?";
+    if let Ok(re) = Regex::new(url_pattern) {
+        for mat in re.find_iter(text) {
+            let url_str = mat.as_str().to_string();
+            if !url_candidates.contains(&url_str) {
+                url_candidates.push(url_str);
+            }
+        }
+    }
+
+    // 3. Process candidates
+    for url_str in url_candidates {
+        tracing::debug!(url = %url_str, "Detected URL candidate");
+        let original_url_str = url_str.clone();
+        let mut current_url = url_str;
+
+        if let Some((cleaned, provider)) = rules.sanitize(&current_url, &custom_rules, &ignored_domains) {
+             current_url = cleaned;
+             
+             if user_config.ai_enabled && config.ai_api_key.is_some() {
+                 if let Ok(Some(ai_cleaned)) = ai.sanitize(&current_url).await {
+                     current_url = ai_cleaned;
+                     let provider_name = format!("AI ({})", provider);
+                     cleaned_urls.push((original_url_str, current_url, provider_name));
+                     continue;
+                 }
+             }
+
+             cleaned_urls.push((original_url_str, current_url, provider));
+        } else if user_config.ai_enabled && config.ai_api_key.is_some() {
+             if let Ok(Some(ai_cleaned)) = ai.sanitize(&current_url).await {
+                 cleaned_urls.push((original_url_str, ai_cleaned, "AI (Deep Scan)".to_string()));
+             }
         }
     }
 
