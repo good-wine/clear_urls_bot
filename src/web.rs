@@ -479,12 +479,17 @@ fn verify_telegram_auth(params: &HashMap<String, String>, token: &str) -> bool {
                 Err(_) => 0,
             };
             if now > 0 && now - auth_date > 86400 {
+                tracing::warn!("Telegram auth failed: Data is too old (auth_date: {})", auth_date);
                 return false;
             }
         }
     }
 
-    let mut keys: Vec<&String> = params.keys().filter(|k| k.as_str() != "hash").collect();
+    // Filter only known Telegram fields to avoid interference from external query params (e.g. utm_source)
+    let allowed_keys = ["auth_date", "first_name", "id", "last_name", "photo_url", "username", "language_code"];
+    let mut keys: Vec<&String> = params.keys()
+        .filter(|k| k.as_str() != "hash" && allowed_keys.contains(&k.as_str()))
+        .collect();
     keys.sort();
 
     let data_check_string = keys
@@ -501,5 +506,15 @@ fn verify_telegram_auth(params: &HashMap<String, String>, token: &str) -> bool {
     mac.update(data_check_string.as_bytes());
 
     let computed_hash = hex::encode(mac.finalize().into_bytes());
-    computed_hash == *hash
+    
+    let is_valid = computed_hash == *hash;
+    
+    if !is_valid {
+        tracing::warn!(
+            "Telegram auth failed: Hash mismatch. \nParams: {:?} \nCheckString: {:?} \nComputed: {} \nExpected: {}", 
+            keys, data_check_string, computed_hash, hash
+        );
+    }
+
+    is_valid
 }
