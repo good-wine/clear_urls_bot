@@ -23,3 +23,4 @@ All notable changes to this project will be documented in this file.
 - Fixed `reqwest` TLS feature naming conflicts in version 0.13.
 - **Zero-Panic Core**: Eliminated all `unwrap()` calls in favor of graceful error handling and descriptive status codes.
 - **Bot Command Handling**: Fixed `/start` command compatibility in group chats and with bot handles.
+- **Vercel Build Fix**: Added explicit `index` binary target and mandatory `vercel_runtime` for reliable cloud compilation.

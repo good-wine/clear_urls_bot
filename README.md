@@ -48,6 +48,7 @@ A professional, high-performance Rust-based Telegram bot that automatically remo
 - **Database**: sqlx::Any (SQLite/PostgreSQL) with dynamic backend detection.
 - **Real-time**: Async broadcast channels with SSE streaming.
 - **Stability**: Zero-panic core logic with comprehensive `tracing` instrumentation.
+- **Serverless**: Ready for Vercel via `@vercel/rust` with an explicit `index` binary target.
 
 ## 📝 License
 
