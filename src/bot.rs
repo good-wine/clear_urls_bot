@@ -1,8 +1,6 @@
-use teloxide::{
-    prelude::*,
-    types::{ParseMode, ReplyParameters, MessageEntityKind},
-    utils::html,
-};
+use teloxide::prelude::*;
+use teloxide::types::{ParseMode, ReplyParameters, MessageEntityKind};
+use teloxide::utils::html;
 use crate::{sanitizer::RuleEngine, ai_sanitizer::AiEngine, db::Db, models::ChatConfig, i18n};
 
 pub async fn run_bot(
@@ -50,16 +48,14 @@ async fn handle_message(
     } else if let Some(c) = msg.caption() {
         (c, msg.caption_entities())
     } else {
-        ( "", None ) // Use empty text if neither text nor caption exists
+        ( "", None )
     };
 
     let has_urls = entities.as_ref().map(|e| e.iter().any(|entity| {
         matches!(entity.kind, MessageEntityKind::Url | MessageEntityKind::TextLink { .. })
     })).unwrap_or(false);
 
-    tracing::debug!(has_urls = has_urls, "Message analyzed for URLs");
-
-    // Handle Commands (Only in private or if explicitly targeted)
+    // Handle Commands
     if let Some(text_val) = msg.text() {
         if text_val.starts_with('/') {
             let cmd = text_val.split('@').next().unwrap_or("");
@@ -87,16 +83,16 @@ async fn handle_message(
                             .parse_mode(ParseMode::Html)
                             .reply_markup(keyboard)
                             .await?;
-                        return Ok(());
+                        return Ok(())
                     }
                     "/help" => {
                         bot.send_message(chat_id, tr.help_text).parse_mode(ParseMode::Html).await?;
-                        return Ok(());
+                        return Ok(())
                     }
                     "/stats" => {
                         let stats_text = tr.stats_text.replace("{}", &user_config.cleaned_count.to_string());
                         bot.send_message(chat_id, stats_text).parse_mode(ParseMode::Html).await?;
-                        return Ok(());
+                        return Ok(())
                     }
                     _ => {}
                 }
@@ -104,7 +100,7 @@ async fn handle_message(
         }
     }
 
-    // Persist/Update chat info (Only if it's a group context)
+    // Persist/Update chat info
     if msg.chat.is_group() || msg.chat.is_supergroup() || msg.chat.is_channel() {
         let title = msg.chat.title().map(|s| s.to_string());
         let chat_config_db = db.get_chat_config(chat_id.0).await.unwrap_or(None);
@@ -118,7 +114,6 @@ async fn handle_message(
             mode: chat_config_db.map(|c| c.mode).unwrap_or_else(|| "default".to_string()),
         }).await;
 
-        // If it's a new chat AND we found a URL, notify the user privately
         if !chat_exists && user_id != 0 && has_urls {
             let notify_text = format!(
                 "🛡️ <b>ClearURLs attivato!</b>\n\nHo iniziato a proteggere il gruppo: <b>{}</b>\n\nPuoi disattivarlo o cambiare modalità dal tuo dashboard.",
@@ -131,11 +126,10 @@ async fn handle_message(
     }
 
     if !has_urls {
-        return Ok(());
+        return Ok(())
     }
 
     let chat_config = db.get_chat_config_or_default(chat_id.0).await.unwrap_or_default();
-
     let chat_enabled = chat_config.enabled;
     let user_enabled = user_config.enabled;
 
@@ -143,56 +137,52 @@ async fn handle_message(
         return Ok(())
     }
 
-    let entities = entities.unwrap(); // Safe because has_urls is true
-
     let ignored_domains: Vec<String> = user_config.ignored_domains.split(',')
         .map(|s| s.trim().to_lowercase())
         .filter(|s| !s.is_empty())
         .collect();
 
     let custom_rules = db.get_custom_rules(user_id).await.unwrap_or_default();
-
     let mut cleaned_urls = Vec::new();
     let utf16: Vec<u16> = text.encode_utf16().collect();
 
-    for entity in entities {
-        let url_str = match &entity.kind {
-            MessageEntityKind::Url => {
-                let start = entity.offset;
-                let end = start + entity.length;
-                if end > utf16.len() { continue; }
-                String::from_utf16_lossy(&utf16[start..end])
-            },
-            MessageEntityKind::TextLink { url } => {
-                url.to_string()
-            },
-            _ => continue,
-        };
+    if let Some(ents) = entities {
+        for entity in ents {
+            let url_str = match &entity.kind {
+                MessageEntityKind::Url => {
+                    let start = entity.offset;
+                    let end = start + entity.length;
+                    if end > utf16.len() { continue; }
+                    String::from_utf16_lossy(&utf16[start..end])
+                },
+                MessageEntityKind::TextLink { url } => {
+                    url.to_string()
+                },
+                _ => continue,
+            };
 
-        tracing::debug!(url = %url_str, "Detected URL entity");
-        let original_url_str = url_str.clone();
-        let mut current_url = url_str;
+            tracing::debug!(url = %url_str, "Detected URL entity");
+            let original_url_str = url_str.clone();
+            let mut current_url = url_str;
 
-        if let Some((cleaned, provider)) = rules.sanitize(&current_url, &custom_rules, &ignored_domains) {
-             current_url = cleaned;
-             
-             // 3. AI Deep Scan (if enabled and standard rules/custom rules changed something OR we want it as final pass)
-             if user_config.ai_enabled && config.ai_api_key.is_some() {
-                 if let Ok(Some(ai_cleaned)) = ai.sanitize(&current_url).await {
-                     current_url = ai_cleaned;
-                     // We keep the provider name but mark AI was involved
-                     let provider_name = format!("AI ({})", provider);
-                     cleaned_urls.push((original_url_str, current_url, provider_name));
-                     continue;
+            if let Some((cleaned, provider)) = rules.sanitize(&current_url, &custom_rules, &ignored_domains) {
+                 current_url = cleaned;
+                 
+                 if user_config.ai_enabled && config.ai_api_key.is_some() {
+                     if let Ok(Some(ai_cleaned)) = ai.sanitize(&current_url).await {
+                         current_url = ai_cleaned;
+                         let provider_name = format!("AI ({})", provider);
+                         cleaned_urls.push((original_url_str, current_url, provider_name));
+                         continue;
+                     }
                  }
-             }
 
-             cleaned_urls.push((original_url_str, current_url, provider));
-        } else if user_config.ai_enabled && config.ai_api_key.is_some() {
-             // If standard rules didn't change it, maybe AI can
-             if let Ok(Some(ai_cleaned)) = ai.sanitize(&current_url).await {
-                 cleaned_urls.push((original_url_str, ai_cleaned, "AI (Deep Scan)".to_string()));
-             }
+                 cleaned_urls.push((original_url_str, current_url, provider));
+            } else if user_config.ai_enabled && config.ai_api_key.is_some() {
+                 if let Ok(Some(ai_cleaned)) = ai.sanitize(&current_url).await {
+                     cleaned_urls.push((original_url_str, ai_cleaned, "AI (Deep Scan)".to_string()));
+                 }
+            }
         }
     }
 
@@ -200,12 +190,10 @@ async fn handle_message(
         return Ok(())
     }
 
-    // Increment stats
     let _ = db.increment_cleaned_count(user_id, cleaned_urls.len() as i64).await;
     for (orig, clean, prov) in &cleaned_urls {
         let _ = db.log_cleaned_link(user_id, orig, clean, prov).await;
         
-        // Broadcast SSE event
         let _ = event_tx.send(serde_json::json!({
             "user_id": user_id,
             "original_url": orig,
@@ -230,7 +218,7 @@ async fn handle_message(
             response.push_str(&format!("• <a href=\"{}\">{}</a>\n", html::escape(cleaned), html::escape(cleaned)));
         }
         bot.send_message(chat_id, response).parse_mode(ParseMode::Html).await?;
-        return Ok(());
+        return Ok(())
     }
 
     let mut response = String::from(tr.cleaned_links);

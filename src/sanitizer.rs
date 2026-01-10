@@ -331,3 +331,35 @@ impl RuleEngine {
         changed
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_simple_cleaning() {
+        let engine = RuleEngine {
+            providers: Arc::new(RwLock::new(Vec::new())),
+            source_url: String::new(),
+        };
+        
+        // Mock a generic provider
+        {
+            let mut w = engine.providers.write().unwrap();
+            w.push(CompiledProvider {
+                name: "generic".to_string(),
+                url_pattern: Regex::new(".*").unwrap(),
+                rules: vec![Regex::new("utm_.*").unwrap()],
+                exceptions: vec![],
+                raw_rules: vec![],
+                redirections: vec![],
+                referral_marketing: vec![],
+                _force_redirection: false,
+            });
+        }
+
+        let input = "https://example.com/?utm_source=test&foo=bar";
+        let (cleaned, _) = engine.sanitize(input, &[], &[]).unwrap();
+        assert_eq!(cleaned, "https://example.com/?foo=bar");
+    }
+}
