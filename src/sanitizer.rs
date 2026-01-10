@@ -60,11 +60,15 @@ pub struct RuleEngine {
 }
 
 impl RuleEngine {
-    pub async fn new(source_url: &str) -> Result<Self> {
-        let engine = Self {
+    pub fn new_lazy(source_url: &str) -> Self {
+        Self {
             providers: Arc::new(RwLock::new(Vec::new())),
             source_url: source_url.to_string(),
-        };
+        }
+    }
+
+    pub async fn new(source_url: &str) -> Result<Self> {
+        let engine = Self::new_lazy(source_url);
         engine.refresh().await?;
         Ok(engine)
     }

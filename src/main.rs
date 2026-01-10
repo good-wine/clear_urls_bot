@@ -11,11 +11,14 @@ use teloxide::Bot;
 async fn main() -> anyhow::Result<()> {
     logging::init_logging();
 
+    let pid = std::process::id();
+    tracing::info!(pid = %pid, "ClearURLs Bot starting up");
+
     let config = Config::from_env();
     config.validate();
     
     let db = Db::new(&config.database_url).await?;
-    let rules = RuleEngine::new(&config.clearurls_source).await?;
+    let rules = RuleEngine::new_lazy(&config.clearurls_source);
     let ai = AiEngine::new(&config);
     
     // Create a custom reqwest client with a longer timeout for Telegram polling
@@ -32,8 +35,13 @@ async fn main() -> anyhow::Result<()> {
 
     let rules_refresh = rules.clone();
     let refresh_task = tokio::spawn(async move {
+        // Perform initial fetch immediately in background
+        if let Err(e) = rules_refresh.refresh().await {
+            tracing::error!("Failed initial rules fetch: {}", e);
+        }
+
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(86400)); // 24 ore
-        // The first tick is immediate, we skip it because we just called refresh in RuleEngine::new
+        // We already did one refresh, skip the immediate tick
         interval.tick().await; 
         
         loop {
