@@ -62,7 +62,7 @@ struct DashboardTemplate {
     history: Vec<crate::models::CleanedLink>,
     #[allow(dead_code)]
     custom_rules: Vec<crate::models::CustomRule>,
-    stats_by_day: Vec<(String, i64)>,
+    stats_by_day: Vec<(String, i64)> ,
     admin_id: i64,
     tr: crate::i18n::Translations,
 }
@@ -244,7 +244,7 @@ async fn clear_history(State(state): State<AppState>, jar: SignedCookieJar) -> i
 
 async fn login_page(State(state): State<AppState>) -> impl IntoResponse {
     let template = LoginTemplate {
-        bot_username: state.config.bot_username,
+        bot_username: state.config.bot_username.clone(),
         dashboard_url: state.config.dashboard_url.to_string().trim_end_matches('/').to_string(),
     };
     match template.render() {
@@ -264,9 +264,12 @@ async fn auth_callback(
 ) -> impl IntoResponse {
     let token = &state.config.bot_token;
 
+    tracing::debug!("Received Telegram auth callback with params: {:?}", params);
+
     if verify_telegram_auth(&params, token) {
         let user_id_str = params.get("id");
         if user_id_str.is_none() {
+            tracing::error!("Auth success but 'id' param is missing");
             return Redirect::to("/login").into_response();
         }
 
@@ -304,14 +307,13 @@ async fn auth_callback(
         return (jar.add(cookie), Redirect::to("/")).into_response();
     }
 
+    tracing::warn!("Telegram authentication verification failed");
     (jar, Redirect::to("/login")).into_response()
 }
 
 async fn logout(_state: State<AppState>, jar: SignedCookieJar) -> impl IntoResponse {
-    (
-        jar.remove(Cookie::from("user_session")),
-        Redirect::to("/login"),
-    )
+    (jar.remove(Cookie::from("user_session")),
+     Redirect::to("/login"))
 }
 
 #[derive(serde::Deserialize)]
@@ -423,8 +425,7 @@ async fn export_history(State(state): State<AppState>, jar: SignedCookieJar) -> 
                     header::CONTENT_DISPOSITION,
                     "attachment; filename=\"history.csv\"",
                 )
-                .body(axum::body::Body::from(csv))
-            {
+                .body(axum::body::Body::from(csv)) {
                 Ok(r) => r,
                 Err(_) => (
                     axum::http::StatusCode::INTERNAL_SERVER_ERROR,
@@ -471,7 +472,10 @@ async fn events_handler(
 fn verify_telegram_auth(params: &HashMap<String, String>, token: &str) -> bool {
     let hash = match params.get("hash") {
         Some(h) => h,
-        None => return false,
+        None => {
+            tracing::warn!("Telegram auth failed: 'hash' parameter missing");
+            return false;
+        }
     };
 
     if let Some(auth_date_str) = params.get("auth_date") {
@@ -481,9 +485,7 @@ fn verify_telegram_auth(params: &HashMap<String, String>, token: &str) -> bool {
                 Err(_) => 0,
             };
             
-            // Fix: Use saturating_sub to avoid panic if now < auth_date (clock skew)
-            // Allow for some clock drift (e.g. 30 seconds into the future is fine)
-            if auth_date > now + 30 {
+            if auth_date > now + 60 {
                 tracing::warn!("Telegram auth failed: auth_date is in the future (skew?): {} > {}", auth_date, now);
                 return false;
             }
@@ -495,8 +497,8 @@ fn verify_telegram_auth(params: &HashMap<String, String>, token: &str) -> bool {
         }
     }
 
-    // Filter only known Telegram fields to avoid interference from external query params (e.g. utm_source)
-    let allowed_keys = ["auth_date", "first_name", "id", "last_name", "photo_url", "username", "language_code"];
+    // Official fields from documentation: id, first_name, last_name, username, photo_url, auth_date
+    let allowed_keys = ["id", "first_name", "last_name", "username", "photo_url", "auth_date"];
     let mut keys: Vec<&String> = params.keys()
         .filter(|k| k.as_str() != "hash" && allowed_keys.contains(&k.as_str()))
         .collect();
@@ -521,9 +523,11 @@ fn verify_telegram_auth(params: &HashMap<String, String>, token: &str) -> bool {
     
     if !is_valid {
         tracing::warn!(
-            "Telegram auth failed: Hash mismatch. \nParams: {:?} \nCheckString: {:?} \nComputed: {} \nExpected: {}", 
-            keys, data_check_string, computed_hash, hash
+            "Telegram auth failed: Hash mismatch.\nCheckString:\n---\n{}\n---\nComputed: {}\nExpected: {}", 
+            data_check_string, computed_hash, hash
         );
+    } else {
+        tracing::info!("Telegram authentication verified successfully for id={}", params.get("id").unwrap_or(&"unknown".into()));
     }
 
     is_valid
