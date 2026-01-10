@@ -4,16 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ tr.d_title }}</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
-            --primary: #0088cc;
+            --primary: var(--tg-theme-button-color, #0088cc);
             --primary-hover: #0077b5;
-            --bg: #f4f7f9;
-            --card-bg: #ffffff;
-            --text: #333333;
-            --text-muted: #666666;
-            --border: #dfe3e8;
+            --bg: var(--tg-theme-bg-color, #f4f7f9);
+            --card-bg: var(--tg-theme-secondary-bg-color, #ffffff);
+            --text: var(--tg-theme-text-color, #333333);
+            --text-muted: var(--tg-theme-hint-color, #666666);
+            --border: var(--tg-theme-secondary-bg-color, #dfe3e8);
             --success: #4caf50;
             --danger: #f44336;
             --shadow: 0 4px 6px rgba(0,0,0,0.05);
@@ -70,10 +71,27 @@
             {% if user.id == admin_id %}
                 <a href="/admin" class="logout-btn" style="border-color: #ff9800; color: #ff9800;">ADMIN</a>
             {% endif %}
-            <span aria-label="User profile">{{ user.first_name }}</span>
-            <a href="/logout" class="logout-btn" aria-label="Logout">Logout</a>
+            <span aria-label="User profile" class="web-only">{{ user.first_name }}</span>
+            <a href="/logout" class="logout-btn web-only" aria-label="Logout">Logout</a>
+            <button onclick="window.Telegram.WebApp.close()" class="tg-only" style="padding: 0.4rem 1rem; font-size: 0.8rem;">Close</button>
         </nav>
     </header>
+
+    <script>
+        // Initialize Telegram Mini App
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+
+        // Toggle UI elements based on environment
+        if (tg.initData) {
+            document.querySelectorAll('.web-only').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('.tg-only').forEach(el => el.style.display = 'block');
+        } else {
+            document.querySelectorAll('.web-only').forEach(el => el.style.display = 'block');
+            document.querySelectorAll('.tg-only').forEach(el => el.style.display = 'none');
+        }
+    </script>
 
     <main class="container" role="main">
         <div class="stats-grid">
