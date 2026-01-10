@@ -246,13 +246,19 @@ impl Db {
         Ok(stats)
     }
 
-    pub async fn get_chat_config(&self, chat_id: i64) -> Result<ChatConfig> {
+    pub async fn get_chat_config(&self, chat_id: i64) -> Result<Option<ChatConfig>> {
         let config = sqlx::query_as::<_, ChatConfig>(
             "SELECT * FROM chat_configs WHERE chat_id = ?"
         )
         .bind(chat_id)
         .fetch_optional(&self.pool)
         .await?;
+
+        Ok(config)
+    }
+
+    pub async fn get_chat_config_or_default(&self, chat_id: i64) -> Result<ChatConfig> {
+        let config = self.get_chat_config(chat_id).await?;
 
         Ok(config.unwrap_or(ChatConfig {
             chat_id,

@@ -12,7 +12,7 @@ pub struct UserConfig {
     pub language: String, // "en", "it", etc.
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, FromRow)]
+#[derive(Debug, Serialize, Deserialize, Clone, FromRow, Default)]
 pub struct ChatConfig {
     pub chat_id: i64,
     pub title: Option<String>,

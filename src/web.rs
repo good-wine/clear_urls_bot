@@ -168,7 +168,7 @@ async fn update_chat_mode(
 ) -> impl IntoResponse {
     if let Some(user_cookie) = jar.get("user_session") {
         if let Ok(user) = serde_json::from_str::<TelegramUserSession>(user_cookie.value()) {
-            if let Ok(mut chat_config) = state.db.get_chat_config(chat_id).await {
+            if let Ok(mut chat_config) = state.db.get_chat_config_or_default(chat_id).await {
                 if chat_config.added_by == user.id {
                     chat_config.mode = form.mode;
                     let _ = state.db.save_chat_config(&chat_config).await;
@@ -306,7 +306,7 @@ async fn toggle_chat(
 ) -> impl IntoResponse {
     if let Some(user_cookie) = jar.get("user_session") {
         if let Ok(user) = serde_json::from_str::<TelegramUserSession>(user_cookie.value()) {
-            if let Ok(mut chat_config) = state.db.get_chat_config(chat_id).await {
+            if let Ok(mut chat_config) = state.db.get_chat_config_or_default(chat_id).await {
                 if chat_config.added_by == user.id {
                     chat_config.enabled = !chat_config.enabled;
                     let _ = state.db.save_chat_config(&chat_config).await;
