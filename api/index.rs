@@ -14,8 +14,10 @@ async fn main() -> Result<(), Error> {
 
 pub async fn handler(_state: VercelState, req: Request) -> Result<Response<ResponseBody>, Error> {
     let config = Config::from_env();
+    // In serverless, we must use a remote database (Supabase/Postgres)
     let db = Db::new(&config.database_url).await.map_err(|e| Error::from(e.to_string()))?;
     
+    // Serverless functions are short-lived, so broadcast channels are local to the invocation
     let (event_tx, _) = tokio::sync::broadcast::channel::<serde_json::Value>(100);
 
     let key = if let Some(ref k) = config.cookie_key {

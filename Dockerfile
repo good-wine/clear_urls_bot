@@ -7,17 +7,20 @@ COPY . .
 # Install dependencies for SQLx and other crates
 RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
 
-RUN cargo build --release
+# Build only the persistent bot binary for the container environment
+RUN cargo build --release --bin clear_urls_bot
 
 # Final Stage
 FROM debian:bookworm-slim
 
 WORKDIR /app
-RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y libssl-dev ca-certificates && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /usr/src/app/target/release/clear_urls_bot .
+# Copy binary and templates
+COPY --from=builder /usr/src/app/target/release/clear_urls_bot /usr/local/bin/clear_urls_bot
 COPY --from=builder /usr/src/app/templates ./templates
 
 EXPOSE 3000
 
-CMD ["./clear_urls_bot"]
+# The bot binary will run both the bot loop and the web server if run locally
+CMD ["clear_urls_bot"]

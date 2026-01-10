@@ -3,3 +3,5 @@
 /bot.db-shm
 /bot.db-wal
 .envwasm-functions/target/
+.vercel
+.env*.local

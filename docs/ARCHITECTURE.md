@@ -34,6 +34,22 @@ The system uses SQLx with automatic migrations and dynamic backend detection.
 - `cleaned_links`: Audit log of all sanitized URLs.
 - `custom_rules`: User-defined regex patterns.
 
+## 🚀 Hybrid Deployment Model
+
+To ensure reliability and performance, this project adopts a split architecture:
+
+1.  **Vercel (Web Dashboard)**:
+    *   Hosts the UI and management API via serverless functions.
+    *   Uses `api/index.rs` as the entry point.
+    *   Optimized for scalability and global delivery.
+2.  **Persistent Host (Railway/Fly.io/Docker)**:
+    *   Runs the `clear_urls_bot` binary 24/7.
+    *   Maintains the long-polling connection to Telegram.
+    *   Uses the `Dockerfile` for containerized deployment.
+3.  **Shared Database (Supabase/Postgres)**:
+    *   The single source of truth connecting both environments.
+    *   The Bot writes history and stats; the Dashboard reads and manages configs.
+
 ## 🛡️ Reliability & Stability
 - **Zero-Panic Policy**: The codebase has been refactored to remove all `unwrap()` calls in the core logic. Errors are handled gracefully via `Result` types and meaningful HTTP status codes.
 - **Dynamic Drivers**: The same binary can run against a local `.db` file or a production RDS/Supabase instance without recompilation.
