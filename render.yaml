@@ -1,17 +1,17 @@
 services:
   - type: web
-    name: clear-urls-bot
+    name: clear-urls-api
     env: docker
     dockerCommand: clear_urls_bot
-    plan: starter # Starter plan required for persistent disk
+    plan: starter
     region: frankfurt
+    healthCheckPath: /health
+    domains:
+      - api.cub.goodwine.click
     envVars:
       - key: APP_ENV
         value: production
-      - key: RUST_LOG
-        value: clear_urls_bot=info,teloxide=info,axum=info
       - key: DATABASE_URL
-        # Priority: postgres from environment (if linked), then sqlite disk
         fromDatabase:
           name: clear-urls-db
           property: connectionString
@@ -19,17 +19,11 @@ services:
         sync: false
       - key: BOT_USERNAME
         sync: false
-      - key: DASHBOARD_URL
-        sync: false
       - key: ADMIN_ID
         sync: false
-      - key: COOKIE_KEY
-        generateValue: true
-    disk:
-      name: clearurls-data
-      mountPath: /etc/clearurls
-      sizeGB: 1
-    healthCheckPath: /health
+      - key: RUST_LOG
+        value: info
+    autoDeploy: true
 
 databases:
   - name: clear-urls-db

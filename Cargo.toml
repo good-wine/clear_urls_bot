@@ -7,8 +7,6 @@ default-run = "clear_urls_bot"
 [dependencies]
 tokio = { version = "1.0", features = ["full"] }
 teloxide = { version = "0.17", features = ["macros"] }
-axum = "0.8"
-axum-extra = { version = "0.12", features = ["cookie", "cookie-signed", "query"] }
 tower-http = { version = "0.6", features = ["fs", "trace", "cors", "set-header"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "postgres", "macros"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -25,19 +23,15 @@ anyhow = "1.0"
 hmac = "0.12"
 sha2 = "0.10"
 hex = "0.4"
-askama = "0.15"
 tower = { version = "0.5", features = ["util"] }
 futures = "0.3"
 time = "0.3"
 async-stream = "0.3"
+async-trait = "0.1"
 whatlang = "0.18.0"
 moka = { version = "0.12.12", features = ["future"] }
-telegram-webapp-sdk = "0.3.1"
 serde_urlencoded = "0.7.1"
 
-[features]
-default = []
-supabase = []
 
 [profile.release]
 lto = true

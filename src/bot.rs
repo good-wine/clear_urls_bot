@@ -116,23 +116,9 @@ async fn handle_message(
                 match cmd {
                     "/start" => {
                         tracing::info!("Handling /start command for user {}", user_id);
-                        let keyboard = teloxide::types::InlineKeyboardMarkup::new(vec![
-                            vec![teloxide::types::InlineKeyboardButton::url(
-                                tr.open_dashboard,
-                                config.dashboard_url.clone(),
-                            )],
-                            vec![teloxide::types::InlineKeyboardButton::web_app(
-                                tr.open_web_app,
-                                teloxide::types::WebAppInfo {
-                                    url: config.dashboard_url.clone(),
-                                },
-                            )],
-                        ]);
-
                         let welcome_text = tr.welcome.replace("{}", &user_id.to_string());
                         bot.send_message(chat_id, welcome_text)
                             .parse_mode(ParseMode::Html)
-                            .reply_markup(keyboard)
                             .await?;
                         return Ok(());
                     }

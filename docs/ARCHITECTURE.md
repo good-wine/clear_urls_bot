@@ -9,27 +9,18 @@ The backbone of the application. It exports all core modules:
 - `sanitizer`: The regex-based engine that processes URLs. Hardened against lock poisoning. Includes `expand_url` to uncover hidden trackers in shortened links.
 - `ai_sanitizer`: Optional deep-scan logic using LLMs.
 - `db`: Database abstraction layer using **sqlx::Any**, supporting both **PostgreSQL** and **SQLite** dynamically.
-- `bot`: Telegram bot handler logic (Teloxide). Includes **Smart Language Detection** to automatically respond in the user's preferred language.
-- `i18n`: Internationalization module providing translations for core UI and bot messages.
-- `web`: Axum-based web dashboard and API. Re-engineered for Axum 0.8 compatibility.
+- `bot`: Telegram bot handler logic (Teloxide).
+- `i18n`: Internationalization module providing translations for core messages.
 
 ### 2. Standalone Binary (`src/main.rs`)
-Used for Podman and local deployments. It initializes the database, starts the Telegram bot (long polling), and runs the Axum web server concurrently using `tokio::select!`.
+The entry point that initializes the database and starts the Telegram bot (long polling).
 
 ### 3. WASM Module (`wasm-functions/`)
 A standalone Rust crate that compiles the sanitization logic to WebAssembly, allowing for zero-latency URL cleaning in the browser.
 
-### 4. Internationalization (i18n)
-The project supports full localization for **English** and **Italian**. The bot uses a priority-based detection system:
-1. **Message Text Analysis**: Detects the language of the incoming message using `whatlang`.
-2. **Telegram Language Code**: Falls back to the user's interface language metadata.
-3. **Stored Preference**: Finally uses the user-selected language from the dashboard.
-
 ## 🔄 Data Flow
 
 1. **Telegram Update** -> `src/bot.rs` -> `src/sanitizer.rs` -> **Database Log**.
-2. **Dashboard Update** -> `src/web.rs` -> `src/db.rs` -> **UI Render**.
-3. **SSE Events** -> Real-time updates pushed from the bot task to the web dashboard.
 
 ## 📊 Database Schema
 The system uses SQLx with automatic migrations and dynamic backend detection.
@@ -42,12 +33,11 @@ The system uses SQLx with automatic migrations and dynamic backend detection.
 
 The project is optimized for high-performance Podman hosting with the following features:
 
-- **Security**: The container runs as a non-root `clearurls` user.
+- **Security**: The container runs as a non-root user.
 - **Reliability**: Integrated `HEALTHCHECK` ensures the host can automatically restart failing containers.
 - **Stability**: Resource limits (512MB RAM, 0.5 CPU) prevent accidental host resource exhaustion.
 - **Persistence**: Database state is preserved via volume mounts for SQLite, or connection strings for external PostgreSQL.
-- **Log Management**: Automatic JSON log rotation prevents disk filling.
 
 ## 🛡️ Reliability & Stability
-- **Zero-Panic Policy**: The codebase has been refactored to remove all `unwrap()` calls in the core logic. Errors are handled gracefully via `Result` types and meaningful HTTP status codes.
-- **Dynamic Drivers**: The same binary can run against a local `.db` file or a production RDS/Supabase instance without recompilation.
+- **Zero-Panic Policy**: The codebase avoids `unwrap()` in core logic, handling errors gracefully via `Result` types.
+- **Dynamic Drivers**: The same binary can run against a local `.db` file or a production PostgreSQL instance without recompilation.
