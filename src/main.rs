@@ -1,11 +1,14 @@
-use clear_urls_bot::ai_sanitizer::AiEngine;
-use clear_urls_bot::bot;
-use clear_urls_bot::config::Config;
-use clear_urls_bot::db::Db;
-use clear_urls_bot::logging;
-use clear_urls_bot::sanitizer::RuleEngine;
-use clear_urls_bot::web;
+use clear_urls_bot::{
+    ai_sanitizer::AiEngine,
+    bot,
+    config::Config,
+    db::Db,
+    logging,
+    sanitizer::RuleEngine,
+};
+use std::time::Duration;
 use teloxide::Bot;
+use tokio::time::interval;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -23,11 +26,11 @@ async fn main() -> anyhow::Result<()> {
 
     // Create a custom reqwest client with a longer timeout for Telegram polling
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(60))
+        .timeout(Duration::from_secs(60))
         .build()?;
     let bot = Bot::with_client(&config.bot_token, client);
 
-    // Canale per eventi real-time (SSE)
+    // Canale per eventi real-time (SSE) - kept for bot logic, though not used in GraphQL yet
     let (event_tx, _) = tokio::sync::broadcast::channel::<serde_json::Value>(100);
 
     let bot_task = tokio::spawn(bot::run_bot(
@@ -38,19 +41,14 @@ async fn main() -> anyhow::Result<()> {
         config.clone(),
         event_tx.clone(),
     ));
-    let web_task = tokio::spawn(web::run_server(config, db, event_tx));
 
     let rules_refresh = rules.clone();
     let refresh_task = tokio::spawn(async move {
-        // Perform initial fetch immediately in background
         if let Err(e) = rules_refresh.refresh().await {
             tracing::error!("Failed initial rules fetch: {}", e);
         }
-
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(86400)); // 24 ore
-                                                                                           // We already did one refresh, skip the immediate tick
+        let mut interval = interval(Duration::from_secs(86400));
         interval.tick().await;
-
         loop {
             interval.tick().await;
             if let Err(e) = rules_refresh.refresh().await {
@@ -60,24 +58,8 @@ async fn main() -> anyhow::Result<()> {
     });
 
     tokio::select! {
-        res = bot_task => {
-            match res {
-                Ok(_) => tracing::error!("Bot task finished unexpectedly"),
-                Err(e) => tracing::error!("Bot task panicked: {:?}", e),
-            }
-        }
-        res = web_task => {
-            match res {
-                Ok(_) => tracing::error!("Web server task finished unexpectedly"),
-                Err(e) => tracing::error!("Web server task panicked: {:?}", e),
-            }
-        }
-        res = refresh_task => {
-            match res {
-                Ok(_) => tracing::error!("Refresh task finished unexpectedly"),
-                Err(e) => tracing::error!("Refresh task panicked: {:?}", e),
-            }
-        }
+        res = bot_task => tracing::error!("Bot task finished: {:?}", res),
+        res = refresh_task => tracing::error!("Refresh task finished: {:?}", res),
     }
 
     Ok(())
