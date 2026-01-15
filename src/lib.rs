@@ -6,4 +6,4 @@ pub mod i18n;
 pub mod logging;
 pub mod models;
 pub mod sanitizer;
-pub mod web;
+
